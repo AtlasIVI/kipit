@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, Outlet } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 
 // Layout
@@ -14,19 +14,35 @@ import Login from '@/pages/Login'
 import Register from '@/pages/Register'
 import Admin from '@/pages/Admin'
 import NotFound from '@/pages/NotFound'
-// AJOUTE CETTE LIGNE :
-import AddTransaction from '@/pages/AddTransaction' 
+import AddTransaction from '@/pages/transactions/add'
+import AddCategory from '@/pages/categories/add'
+import CategoriesManager from '@/pages/categories/index'
+import AddSubscription from './pages/subscriptions/add'
 
-// ... (Garde tes fonctions ProtectedRoute, AdminRoute et LoadingSpinner telles quelles)
+// Composant de protection de route
+const ProtectedRoute = ({ children }) => {
+  const { user, loading } = useAuth()
+  if (loading) return <div className="flex h-screen items-center justify-center font-medium">Chargement...</div>
+  if (!user) return <Navigate to="/login" replace />
+  return children ? children : <Outlet />
+}
+
+// Composant de protection Admin
+const AdminRoute = ({ children }) => {
+  const { profile, loading } = useAuth()
+  if (loading) return null
+  if (!profile?.is_admin) return <Navigate to="/" replace />
+  return children
+}
 
 export default function AppRouter() {
   return (
     <Routes>
-      {/* Public routes */}
+      {/* Routes publiques */}
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
 
-      {/* Protected routes inside app layout */}
+      {/* Routes protégées avec le Layout principal */}
       <Route path="/" element={
         <ProtectedRoute>
           <AppLayout />
@@ -34,11 +50,15 @@ export default function AppRouter() {
       }>
         <Route index element={<Home />} />
         <Route path="transactions" element={<Transactions />} />
-        <Route path="subscriptions" element={<Subscriptions />} />
-        <Route path="reports" element={<Reports />} />
-        <Route path="settings" element={<Settings />} />
         <Route path="transactions/add" element={<AddTransaction />} />
-        
+        <Route path="categories/add" element={<AddCategory />} />
+        <Route path="subscriptions" element={<Subscriptions />} />
+        <Route path="subscriptions/add" element={<AddSubscription />} />
+        <Route path="settings" element={<Settings />} />
+        <Route path="categories">
+          <Route index element={<CategoriesManager />} />
+          <Route path="add" element={<AddCategory />} />
+        </Route>        
         <Route path="admin" element={
           <AdminRoute>
             <Admin />
