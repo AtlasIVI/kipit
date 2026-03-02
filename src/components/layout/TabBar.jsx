@@ -15,8 +15,7 @@ export default function TabBar() {
 
   return (
     <>
-      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-zinc-950 border-t border-zinc-100 dark:border-zinc-800 h-tab-bar">
-        <div className="flex items-center justify-around h-16 max-w-lg mx-auto px-2">
+<nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-lg border-t border-zinc-100 dark:border-zinc-800 h-tab-bar">        <div className="flex items-center justify-around h-16 max-w-lg mx-auto px-2">
           {tabs.slice(0, 2).map(({ to, icon: Icon, label }) => (
             <NavLink
               key={to}

@@ -1,70 +1,80 @@
-import { Outlet, NavLink, useNavigate } from 'react-router-dom'
-import { Home, ArrowLeftRight, RefreshCw, BarChart2, Plus } from 'lucide-react'
-import { useState } from 'react'
-import AddModal from '@/components/ui/AddModal'
+import { Outlet, NavLink } from 'react-router-dom';
+import { Home, Wallet, PieChart, Settings, Plus, CreditCard } from 'lucide-react';
+import TabBar from './TabBar';
 
-const tabs = [
-  { to: '/',              icon: Home,           label: 'Home'          },
-  { to: '/transactions',  icon: ArrowLeftRight,  label: 'Transactions'  },
-  { to: '/subscriptions', icon: RefreshCw,       label: 'Subscriptions' },
-  { to: '/reports',       icon: BarChart2,        label: 'Reports'       },
-]
+// Composant pour les items de la Sidebar (Version Desktop)
+const SidebarItem = ({ to, icon: Icon, label }) => (
+  <NavLink
+    to={to}
+    className={({ isActive }) =>
+      `flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-200 ${
+        isActive
+          ? 'bg-brand-500 text-white shadow-lg shadow-brand-500/30'
+          : 'text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 dark:text-zinc-400'
+      }`
+    }
+  >
+    <Icon size={22} />
+    <span className="font-medium">{label}</span>
+  </NavLink>
+);
 
 export default function AppLayout() {
-  const [showAdd, setShowAdd] = useState(false)
+  const navItems = [
+    { to: '/', icon: Home, label: 'Tableau de bord' },
+    { to: '/transactions', icon: Wallet, label: 'Transactions' },
+    { to: '/reports', icon: PieChart, label: 'Rapports' },
+    { to: '/subscriptions', icon: CreditCard, label: 'Abonnements' },
+    { to: '/settings', icon: Settings, label: 'Paramètres' },
+  ];
 
   return (
-    <div className="flex flex-col h-screen max-w-lg mx-auto relative">
-      {/* Page content */}
-      <main className="flex-1 overflow-y-auto scrollbar-hide pb-24">
-        <Outlet />
-      </main>
-
-      {/* Bottom tab bar */}
-      <nav className="fixed bottom-0 left-0 right-0 max-w-lg mx-auto bg-white dark:bg-surface-900 border-t border-surface-100 dark:border-surface-800 tab-bar z-40">
-        <div className="flex items-center justify-around px-2 pt-2">
-          {tabs.slice(0, 2).map(tab => <TabItem key={tab.to} {...tab} />)}
-
-          {/* Center Add button */}
-          <button
-            onClick={() => setShowAdd(true)}
-            className="flex flex-col items-center -mt-6"
-          >
-            <span className="w-14 h-14 rounded-full bg-brand-500 flex items-center justify-center shadow-lg active:scale-95 transition-transform">
-              <Plus size={26} className="text-white" strokeWidth={2.5} />
-            </span>
-            <span className="text-[10px] mt-1 text-surface-400">Add</span>
-          </button>
-
-          {tabs.slice(2).map(tab => <TabItem key={tab.to} {...tab} />)}
+    <div className="flex h-screen bg-white dark:bg-zinc-950 overflow-hidden">
+      
+      {/* SIDEBAR : Visible uniquement sur PC (lg) */}
+      <aside className="hidden lg:flex flex-col w-72 border-r border-zinc-100 dark:border-zinc-800 p-6 bg-white dark:bg-zinc-950">
+        <div className="flex items-center gap-3 px-4 mb-10">
+          <div className="w-10 h-10 bg-brand-500 rounded-xl flex items-center justify-center text-white shadow-lg shadow-brand-500/20">
+            <Plus size={24} strokeWidth={3} />
+          </div>
+          <span className="text-2xl font-bold tracking-tight dark:text-white">Kipit</span>
         </div>
-      </nav>
 
-      {/* Add modal */}
-      {showAdd && <AddModal onClose={() => setShowAdd(false)} />}
+        <nav className="flex-1 space-y-2">
+          {navItems.map((item) => (
+            <SidebarItem key={item.to} {...item} />
+          ))}
+        </nav>
+
+        {/* Pied de la Sidebar (Profil/Upgrade) */}
+        <div className="mt-auto p-4 bg-zinc-50 dark:bg-zinc-900 rounded-3xl">
+          <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Plan Free</p>
+          <button className="text-sm font-bold text-brand-600 dark:text-brand-400 hover:underline">
+            Passer Premium →
+          </button>
+        </div>
+      </aside>
+
+      {/* CONTENU PRINCIPAL */}
+      <div className="flex flex-col flex-1 h-screen relative overflow-hidden">
+        
+        <main className="flex-1 overflow-y-auto pb-24 lg:pb-0">
+          {/* Conteneur de contenu : Limité sur mobile, large sur PC */}
+          <div className="max-w-screen-xl mx-auto p-4 md:p-8 lg:p-12">
+            <Outlet />
+          </div>
+        </main>
+
+        {/* TABBAR : Visible uniquement sur Mobile/Tablette (max-lg) */}
+        <div className="lg:hidden">
+          <TabBar />
+        </div>
+
+        {/* Bouton d'ajout rapide pour Desktop (Optionnel car déjà en sidebar ou menu) */}
+        <button className="hidden lg:flex fixed bottom-8 right-8 w-14 h-14 bg-brand-500 text-white rounded-full items-center justify-center shadow-2xl hover:scale-110 active:scale-95 transition-transform z-50">
+          <Plus size={28} />
+        </button>
+      </div>
     </div>
-  )
-}
-
-function TabItem({ to, icon: Icon, label }) {
-  return (
-    <NavLink
-      to={to}
-      end={to === '/'}
-      className={({ isActive }) =>
-        `flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-colors ${
-          isActive
-            ? 'text-brand-600 dark:text-brand-400'
-            : 'text-surface-400 hover:text-surface-600 dark:hover:text-surface-300'
-        }`
-      }
-    >
-      {({ isActive }) => (
-        <>
-          <Icon size={22} strokeWidth={isActive ? 2.5 : 1.8} />
-          <span className="text-[10px] font-medium">{label}</span>
-        </>
-      )}
-    </NavLink>
-  )
+  );
 }
