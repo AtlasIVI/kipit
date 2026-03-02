@@ -1,60 +1,129 @@
-import { BarChart2, ArrowUpRight, ArrowDownRight } from 'lucide-react'
+import React, { useState } from 'react'
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Sector } from 'recharts'
+import { Wallet, Sprout, TrendingDown, Target } from 'lucide-react'
+
+// Fonction pour dessiner le quartier "agrandi" au survol
+const renderActiveShape = (props) => {
+  const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill } = props;
+  return (
+    <g>
+      <Sector
+        cx={cx}
+        cy={cy}
+        innerRadius={innerRadius}
+        outerRadius={outerRadius + 8} // On agrandit de 8px au survol
+        startAngle={startAngle}
+        endAngle={endAngle}
+        fill={fill}
+        className="transition-all duration-300 ease-out"
+      />
+    </g>
+  );
+};
 
 export default function Home() {
-  return (
-    <div className="p-4 pt-safe space-y-6">
-      {/* Header avec Solde */}
-      <header className="flex justify-between items-center pt-4">
-        <div>
-          <h1 className="text-sm text-surface-500 dark:text-zinc-400 font-medium text-zinc-500">Solde Total</h1>
-          <p className="text-3xl font-bold font-mono tracking-tight dark:text-white">$4,250.00</p>
-        </div>
-        <div className="w-12 h-12 rounded-2xl bg-brand-100 dark:bg-brand-900/30 flex items-center justify-center text-brand-600">
-          <BarChart2 size={24} />
-        </div>
-      </header>
+  // États pour gérer quel quartier est survolé pour chaque graphique
+  const [activePlanned, setActivePlanned] = useState(null);
+  const [activeReal, setActiveReal] = useState(null);
 
-      {/* Carte Principale (Dépenses) */}
-      <div className="bg-zinc-900 dark:bg-brand-600 text-white p-6 rounded-3xl shadow-xl shadow-brand-500/20">
-        <div className="flex justify-between items-start mb-8">
-          <div className="space-y-1">
-            <span className="text-xs opacity-80 uppercase tracking-wider font-medium">Dépenses du mois</span>
-            <p className="text-3xl font-mono font-semibold">$1,240.50</p>
-          </div>
-          <span className="bg-white/20 px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1">
-            <ArrowDownRight size={12} /> -12%
-          </span>
+  const plannedData = [
+    { name: 'Logement', value: 800, color: '#6366f1' },
+    { name: 'Abonnements', value: 120, color: '#3b82f6' },
+    { name: 'Courses', value: 300, color: '#f59e0b' },
+    { name: 'Loisirs', value: 150, color: '#ec4899' },
+  ];
+
+  const realData = [
+    { name: 'Logement', value: 800, color: '#6366f1' },
+    { name: 'Abonnements', value: 125, color: '#3b82f6' },
+    { name: 'Courses', value: 340, color: '#f59e0b' },
+    { name: 'Loisirs', value: 80, color: '#ec4899' },
+  ];
+
+  return (
+    <div className="p-4 pt-safe space-y-6 pb-24">
+      {/* ... (Header et Cartes identiques au code précédent) ... */}
+      
+      <div className="bg-white dark:bg-zinc-900 p-5 rounded-[32px] border border-zinc-100 dark:border-zinc-800 space-y-6">
+        <div className="flex items-center gap-2 px-1 text-zinc-500">
+          <Target size={18} />
+          <h3 className="text-sm font-bold uppercase tracking-wider">Analyse Budgétaire</h3>
         </div>
-        
-        {/* Barre de progression de budget */}
-        <div className="space-y-2">
-          <div className="flex justify-between text-[10px] uppercase tracking-widest opacity-70">
-            <span>Budget mensuel</span>
-            <span>65%</span>
+
+        <div className="grid grid-cols-2 gap-4">
+          {/* Graphique Prévu */}
+          <div className="space-y-3">
+            <p className="text-[10px] text-center font-bold text-zinc-400 uppercase">Prévu</p>
+            <div className="h-40 w-full"> {/* Hauteur augmentée */}
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    activeIndex={activePlanned}
+                    activeShape={renderActiveShape}
+                    data={plannedData}
+                    innerRadius={35} // Plus grand
+                    outerRadius={55} // Plus grand
+                    paddingAngle={4}
+                    dataKey="value"
+                    onMouseEnter={(_, index) => setActivePlanned(index)}
+                    onMouseLeave={() => setActivePlanned(null)}
+                  >
+                    {plannedData.map((entry, index) => (
+                      <Cell key={`planned-${index}`} fill={entry.color} stroke="none" className="outline-none" />
+                    ))}
+                  </Pie>
+                  <Tooltip contentStyle={{ display: 'none' }} /> {/* On cache le tooltip par défaut pour le style */}
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <p className="text-center font-mono text-sm font-bold">1 370 €</p>
           </div>
-          <div className="w-full h-2 bg-white/20 rounded-full overflow-hidden">
-            <div className="w-[65%] h-full bg-white rounded-full shadow-[0_0_8px_rgba(255,255,255,0.5)]" />
+
+          {/* Graphique Réel */}
+          <div className="space-y-3 border-l border-zinc-50 dark:border-zinc-800">
+            <p className="text-[10px] text-center font-bold text-zinc-400 uppercase">Réel</p>
+            <div className="h-40 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    activeIndex={activeReal}
+                    activeShape={renderActiveShape}
+                    data={realData}
+                    innerRadius={35}
+                    outerRadius={55}
+                    paddingAngle={4}
+                    dataKey="value"
+                    onMouseEnter={(_, index) => setActiveReal(index)}
+                    onMouseLeave={() => setActiveReal(null)}
+                  >
+                    {realData.map((entry, index) => (
+                      <Cell key={`real-${index}`} fill={entry.color} stroke="none" className="outline-none" />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <p className="text-center font-mono text-sm font-bold">1 345 €</p>
           </div>
         </div>
       </div>
 
-      {/* Quick Stats */}
-      <div className="grid grid-cols-2 gap-4">
-        <div className="bg-white dark:bg-zinc-900 p-4 rounded-3xl border border-zinc-100 dark:border-zinc-800">
-          <div className="w-8 h-8 rounded-full bg-success/10 text-success flex items-center justify-center mb-3">
-            <ArrowUpRight size={18} />
+      {/* Légende interactive */}
+      <div className="space-y-2">
+        {realData.map((cat, index) => (
+          <div 
+            key={cat.name} 
+            onMouseEnter={() => setActiveReal(index)}
+            onMouseLeave={() => setActiveReal(null)}
+            className={`flex items-center justify-between p-4 rounded-2xl transition-colors ${activeReal === index ? 'bg-zinc-100 dark:bg-zinc-800' : 'bg-transparent'}`}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: cat.color }} />
+              <span className={`text-sm ${activeReal === index ? 'font-bold' : 'font-medium'}`}>{cat.name}</span>
+            </div>
+            <span className="text-sm font-mono text-zinc-500">{cat.value} €</span>
           </div>
-          <p className="text-xs text-zinc-500">Revenus</p>
-          <p className="text-lg font-mono font-bold dark:text-zinc-100">+$2,800</p>
-        </div>
-        
-        <div className="bg-white dark:bg-zinc-900 p-4 rounded-3xl border border-zinc-100 dark:border-zinc-800">
-          <div className="w-8 h-8 rounded-full bg-danger/10 text-danger flex items-center justify-center mb-3">
-            <ArrowDownRight size={18} />
-          </div>
-          <p className="text-xs text-zinc-500">Dépenses</p>
-          <p className="text-lg font-mono font-bold dark:text-zinc-100">-$840</p>
-        </div>
+        ))}
       </div>
     </div>
   )

@@ -14,28 +14,10 @@ import Login from '@/pages/Login'
 import Register from '@/pages/Register'
 import Admin from '@/pages/Admin'
 import NotFound from '@/pages/NotFound'
+// AJOUTE CETTE LIGNE :
+import AddTransaction from '@/pages/AddTransaction' 
 
-// Protected route wrapper
-function ProtectedRoute({ children }) {
-  const { user, loading } = useAuth()
-  if (loading) return <div className="flex items-center justify-center h-screen"><LoadingSpinner /></div>
-  if (!user) return <Navigate to="/login" replace />
-  return children
-}
-
-// Admin only route
-function AdminRoute({ children }) {
-  const { user, profile, loading } = useAuth()
-  if (loading) return null
-  if (!user || !profile?.is_admin) return <Navigate to="/" replace />
-  return children
-}
-
-function LoadingSpinner() {
-  return (
-    <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
-  )
-}
+// ... (Garde tes fonctions ProtectedRoute, AdminRoute et LoadingSpinner telles quelles)
 
 export default function AppRouter() {
   return (
@@ -55,6 +37,8 @@ export default function AppRouter() {
         <Route path="subscriptions" element={<Subscriptions />} />
         <Route path="reports" element={<Reports />} />
         <Route path="settings" element={<Settings />} />
+        <Route path="transactions/add" element={<AddTransaction />} />
+        
         <Route path="admin" element={
           <AdminRoute>
             <Admin />
