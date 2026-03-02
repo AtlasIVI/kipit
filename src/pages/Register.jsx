@@ -15,6 +15,7 @@ export default function Register() {
   const [token, setToken] = useState(params.get('token') || '')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [success, setSuccess] = useState(false)
 
   const passwordStrength = password.length === 0 ? null : password.length < 6 ? 'weak' : password.length < 10 ? 'medium' : 'strong'
   const strengthColor = { weak: '#ef4444', medium: '#f59e0b', strong: '#22c55e' }
@@ -24,16 +25,65 @@ export default function Register() {
   async function handleSubmit(e) {
     e.preventDefault()
     setError('')
-    if (password.length < 8) { setError('Le mot de passe doit contenir au moins 8 caractères.'); return }
+    if (password.length < 8) {
+      setError('Le mot de passe doit contenir au moins 8 caractères.')
+      return
+    }
     setLoading(true)
-    const { error } = await signUp(email, password, fullName, token)
-    if (error) setError(error.message)
-    else navigate('/')
+    const { data, error } = await signUp(email, password, fullName, token)
+
+    if (error) {
+      setError(error.message)
+      setLoading(false)
+      return
+    }
+
+    // Supabase peut demander une confirmation email
+    // data.user sera null si confirmation requise, présent si auto-confirmé
+    if (data?.user?.identities?.length === 0) {
+      setError('Un compte existe déjà avec cet email.')
+      setLoading(false)
+      return
+    }
+
+    if (data?.session) {
+      // Auto-confirmé → redirect direct
+      navigate('/')
+    } else {
+      // Email de confirmation envoyé
+      setSuccess(true)
+    }
     setLoading(false)
   }
 
   const focusStyle = e => { e.target.style.borderColor = '#22c55e'; e.target.style.boxShadow = '0 0 0 3px rgba(34,197,94,0.12)' }
   const blurStyle  = e => { e.target.style.borderColor = '#1e3a4a'; e.target.style.boxShadow = 'none' }
+
+  // Écran de succès (confirmation email)
+  if (success) {
+    return (
+      <div style={styles.root}>
+        <div style={styles.blob1} />
+        <div style={styles.container}>
+          <div style={styles.logoWrap}>
+            <div style={styles.logoIcon}>💶</div>
+            <span style={styles.logoText}>budget</span>
+          </div>
+          <div style={{ textAlign: 'center', padding: '2rem 0' }}>
+            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📬</div>
+            <h2 style={{ ...styles.headline, fontSize: '1.8rem', marginBottom: '0.75rem' }}>Vérifiez vos emails</h2>
+            <p style={{ color: '#64748b', lineHeight: 1.6 }}>
+              Un lien de confirmation a été envoyé à <strong style={{ color: '#f1f5f9' }}>{email}</strong>.<br />
+              Cliquez sur le lien pour activer votre compte.
+            </p>
+            <Link to="/login" style={{ ...styles.footerLink, display: 'inline-block', marginTop: '2rem' }}>
+              Retour à la connexion →
+            </Link>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div style={styles.root}>
@@ -52,19 +102,20 @@ export default function Register() {
         </div>
 
         <form onSubmit={handleSubmit} style={styles.form}>
-          {/* Full name */}
           <div style={styles.field}>
             <label style={styles.label}>Nom complet</label>
-            <input type="text" value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Votre prénom et nom" required style={styles.input} onFocus={focusStyle} onBlur={blurStyle} />
+            <input type="text" value={fullName} onChange={e => setFullName(e.target.value)}
+              placeholder="Votre prénom et nom" required style={styles.input}
+              onFocus={focusStyle} onBlur={blurStyle} />
           </div>
 
-          {/* Email */}
           <div style={styles.field}>
             <label style={styles.label}>Email</label>
-            <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="vous@exemple.com" required style={styles.input} onFocus={focusStyle} onBlur={blurStyle} />
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+              placeholder="vous@exemple.com" required style={styles.input}
+              onFocus={focusStyle} onBlur={blurStyle} />
           </div>
 
-          {/* Password + strength */}
           <div style={styles.field}>
             <label style={styles.label}>Mot de passe</label>
             <div style={{ position: 'relative' }}>
@@ -81,18 +132,18 @@ export default function Register() {
                 {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
-            {/* Strength bar */}
             {passwordStrength && (
               <div style={styles.strengthWrap}>
                 <div style={styles.strengthTrack}>
                   <div style={{ ...styles.strengthFill, width: strengthWidth[passwordStrength], backgroundColor: strengthColor[passwordStrength] }} />
                 </div>
-                <span style={{ ...styles.strengthText, color: strengthColor[passwordStrength] }}>{strengthLabel[passwordStrength]}</span>
+                <span style={{ ...styles.strengthText, color: strengthColor[passwordStrength] }}>
+                  {strengthLabel[passwordStrength]}
+                </span>
               </div>
             )}
           </div>
 
-          {/* Invite token */}
           <div style={styles.field}>
             <label style={styles.label}>Token d'invitation</label>
             <div style={{ position: 'relative' }}>
@@ -115,7 +166,11 @@ export default function Register() {
           {error && <div style={styles.error}>{error}</div>}
 
           <button type="submit" disabled={loading} style={{ ...styles.submitBtn, opacity: loading ? 0.6 : 1 }}>
-            {loading ? 'Création...' : <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', justifyContent: 'center' }}>Créer mon compte <ArrowRight size={18} /></span>}
+            {loading ? 'Création...' : (
+              <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', justifyContent: 'center' }}>
+                Créer mon compte <ArrowRight size={18} />
+              </span>
+            )}
           </button>
         </form>
 
