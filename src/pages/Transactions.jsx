@@ -13,9 +13,8 @@ function fmt(amount) {
 function groupByDate(txs) {
   const groups = {}
   txs.forEach(t => {
-    const key = t.date
-    if (!groups[key]) groups[key] = []
-    groups[key].push(t)
+    if (!groups[t.date]) groups[t.date] = []
+    groups[t.date].push(t)
   })
   return Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0]))
 }
@@ -25,18 +24,27 @@ export default function Transactions() {
   const { user } = useAuth()
   const [searchParams] = useSearchParams()
   const [currentMonth, setCurrentMonth] = useState(new Date())
-  const [txs, setTxs] = useState([])
+  const [txs, setTxs]         = useState([])
+  const [allCats, setAllCats] = useState([])
   const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
-  const [filterType, setFilterType] = useState('all') // all | expense | income | investment
+  const [search, setSearch]   = useState('')
+  const [filterType, setFilterType]   = useState('all')
+  const [filterCatId, setFilterCatId] = useState(null) // category filter
   const [showForm, setShowForm] = useState(false)
-  const [editTx, setEditTx] = useState(null)
+  const [editTx, setEditTx]    = useState(null)
 
-  // Open form if coming from Add button with ?type=
+  // Open form if coming from Add button
   useEffect(() => {
     const type = searchParams.get('type')
     if (type && type !== 'subscription') setShowForm(true)
   }, [searchParams])
+
+  // Load categories for filter bar
+  useEffect(() => {
+    if (!user) return
+    supabase.from('categories').select('*').eq('user_id', user.id).order('name')
+      .then(({ data }) => setAllCats(data || []))
+  }, [user])
 
   const loadTxs = useCallback(async () => {
     if (!user) return
@@ -47,8 +55,7 @@ export default function Transactions() {
       .from('transactions')
       .select('*, category:categories(id, name, icon, color, type, parent_id)')
       .eq('user_id', user.id)
-      .gte('date', from)
-      .lte('date', to)
+      .gte('date', from).lte('date', to)
       .order('date', { ascending: false })
       .order('created_at', { ascending: false })
     setTxs(data || [])
@@ -57,15 +64,51 @@ export default function Transactions() {
 
   useEffect(() => { loadTxs() }, [loadTxs])
 
+  // Reset category filter when type changes
+  useEffect(() => { setFilterCatId(null) }, [filterType])
+
   async function deleteTx(id) {
     await supabase.from('transactions').delete().eq('id', id)
     setTxs(prev => prev.filter(t => t.id !== id))
   }
 
+  // ── Category filter logic ──────────────────────────────────────────────────
+  // Get categories relevant to current type filter
+  const parentCats = allCats.filter(c =>
+    !c.parent_id &&
+    (filterType === 'all' || c.type === filterType)
+  )
+  const childCats = allCats.filter(c => c.parent_id)
+
+  // Get children of selected parent (for second row)
+  const selectedParent = allCats.find(c => c.id === filterCatId && !c.parent_id)
+  const subCatOptions  = selectedParent
+    ? childCats.filter(c => c.parent_id === selectedParent.id)
+    : []
+
+  // ── Filtering ──────────────────────────────────────────────────────────────
   const filtered = txs.filter(t => {
+    // Type filter
     if (filterType !== 'all' && t.type !== filterType) return false
-    if (search && !t.description?.toLowerCase().includes(search.toLowerCase()) &&
-        !t.category?.name?.toLowerCase().includes(search.toLowerCase())) return false
+
+    // Category filter
+    if (filterCatId) {
+      const isParent = !allCats.find(c => c.id === filterCatId)?.parent_id
+      if (isParent) {
+        // Match category itself or any child
+        const childIds = childCats.filter(c => c.parent_id === filterCatId).map(c => c.id)
+        if (t.category_id !== filterCatId && !childIds.includes(t.category_id)) return false
+      } else {
+        if (t.category_id !== filterCatId) return false
+      }
+    }
+
+    // Search
+    if (search) {
+      const q = search.toLowerCase()
+      if (!t.description?.toLowerCase().includes(q) &&
+          !t.category?.name?.toLowerCase().includes(q)) return false
+    }
     return true
   })
 
@@ -87,44 +130,96 @@ export default function Transactions() {
       {/* Month nav */}
       <div style={styles.monthNav}>
         <button onClick={() => setCurrentMonth(m => subMonths(m, 1))} style={styles.navBtn}>‹</button>
-        <span style={styles.navLabel}>
-          {format(currentMonth, 'MMMM yyyy', { locale: fr })}
-        </span>
-        <button onClick={() => setCurrentMonth(m => addMonths(m, 1))} style={{ ...styles.navBtn, opacity: isCurrentMonth ? 0.3 : 1 }} disabled={isCurrentMonth}>›</button>
+        <span style={styles.navLabel}>{format(currentMonth, 'MMMM yyyy', { locale: fr })}</span>
+        <button onClick={() => setCurrentMonth(m => addMonths(m, 1))}
+          style={{ ...styles.navBtn, opacity: isCurrentMonth ? 0.3 : 1 }} disabled={isCurrentMonth}>›</button>
       </div>
 
-      {/* Search + filter */}
-      <div style={styles.toolbar}>
-        <div style={styles.searchWrap}>
-          <Search size={15} style={styles.searchIcon} />
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Rechercher..."
-            style={styles.searchInput}
-          />
-          {search && <button onClick={() => setSearch('')} style={styles.clearBtn}><X size={14} /></button>}
-        </div>
-        <div style={styles.filters}>
-          {['all','expense','income','investment'].map(type => (
-            <button
-              key={type}
-              onClick={() => setFilterType(type)}
-              style={{ ...styles.filterBtn, ...(filterType === type ? styles.filterBtnActive : {}) }}
-            >
-              {type === 'all' ? 'Tout' : type === 'expense' ? 'Dépenses' : type === 'income' ? 'Revenus' : 'Investis'}
+      {/* Search */}
+      <div style={styles.searchWrap}>
+        <Search size={15} style={styles.searchIcon} />
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Rechercher..."
+          style={styles.searchInput}
+        />
+        {search && (
+          <button onClick={() => setSearch('')} style={styles.clearBtn}><X size={14} /></button>
+        )}
+      </div>
+
+      {/* Type filter pills */}
+      <div style={styles.filterRow}>
+        {['all','expense','income','investment'].map(type => (
+          <button key={type} onClick={() => setFilterType(type)}
+            style={{ ...styles.filterBtn, ...(filterType === type ? styles.filterBtnActive : {}) }}>
+            {type === 'all' ? 'Tout' : type === 'expense' ? 'Dépenses' : type === 'income' ? 'Revenus' : 'Investis'}
+          </button>
+        ))}
+      </div>
+
+      {/* Category filter — parent level */}
+      {parentCats.length > 0 && (
+        <div style={styles.catFilterRow}>
+          <button
+            onClick={() => setFilterCatId(null)}
+            style={{ ...styles.catFilterBtn, ...(filterCatId === null ? styles.catFilterBtnActive : {}) }}>
+            Toutes
+          </button>
+          {parentCats.map(cat => (
+            <button key={cat.id}
+              onClick={() => setFilterCatId(prev => prev === cat.id ? null : cat.id)}
+              style={{
+                ...styles.catFilterBtn,
+                ...(filterCatId === cat.id ? { ...styles.catFilterBtnActive, borderColor: cat.color, backgroundColor: `${cat.color}18` } : {}),
+              }}>
+              {cat.icon} {cat.name}
             </button>
           ))}
         </div>
-      </div>
+      )}
 
+      {/* Sub-category filter — children of selected parent */}
+      {subCatOptions.length > 0 && (
+        <div style={{ ...styles.catFilterRow, marginTop: '-0.25rem' }}>
+          {subCatOptions.map(cat => (
+            <button key={cat.id}
+              onClick={() => setFilterCatId(prev => prev === cat.id ? selectedParent.id : cat.id)}
+              style={{
+                ...styles.catFilterBtn,
+                fontSize: '0.72rem',
+                opacity: 0.85,
+                ...(filterCatId === cat.id ? { ...styles.catFilterBtnActive, borderColor: cat.color, backgroundColor: `${cat.color}18` } : {}),
+              }}>
+              ↳ {cat.icon} {cat.name}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Results count */}
+      {(filterCatId || search || filterType !== 'all') && (
+        <div style={styles.resultCount}>
+          {filtered.length} transaction{filtered.length !== 1 ? 's' : ''}
+          {(filterCatId || search || filterType !== 'all') && (
+            <button onClick={() => { setFilterType('all'); setFilterCatId(null); setSearch('') }} style={styles.clearFiltersBtn}>
+              Effacer les filtres
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Transactions list */}
       {loading ? (
         <div style={styles.center}>Chargement...</div>
       ) : filtered.length === 0 ? (
         <div style={styles.empty}>
           <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🧾</div>
-          <p>Aucune transaction ce mois-ci.</p>
-          <button onClick={() => setShowForm(true)} style={styles.emptyBtn}>Ajouter une transaction</button>
+          <p>{search || filterCatId ? 'Aucune transaction pour ce filtre.' : 'Aucune transaction ce mois-ci.'}</p>
+          {!search && !filterCatId && (
+            <button onClick={() => setShowForm(true)} style={styles.emptyBtn}>Ajouter une transaction</button>
+          )}
         </div>
       ) : (
         <div>
@@ -132,10 +227,11 @@ export default function Transactions() {
           {mandatory.length > 0 && (
             <div style={styles.section}>
               <div style={styles.sectionHeader}>
-                <Lock size={12} />
-                <span>Abonnements (lissés)</span>
+                <Lock size={12} /><span>Abonnements lissés</span>
               </div>
-              {mandatory.map(t => <TxRow key={t.id} tx={t} onDelete={null} onEdit={null} />)}
+              {mandatory.map(t => (
+                <TxRow key={t.id} tx={t} onDelete={null} onEdit={null} />
+              ))}
             </div>
           )}
 
@@ -190,13 +286,14 @@ function TxRow({ tx, onDelete, onEdit }) {
         <div style={{ ...styles.txAmount, color }}>
           {tx.is_virtual ? '' : sign}{fmt(tx.amount)}
         </div>
-        {!tx.is_locked && (
+        {!tx.is_locked ? (
           <div style={styles.txActions}>
             {onEdit   && <button onClick={onEdit}   style={styles.iconBtn}><Pencil size={13} /></button>}
             {onDelete && <button onClick={onDelete} style={{ ...styles.iconBtn, color: '#ef4444' }}><Trash2 size={13} /></button>}
           </div>
+        ) : (
+          <Lock size={11} style={{ color: '#94a3b8', marginTop: '4px' }} />
         )}
-        {tx.is_locked && <Lock size={11} style={{ color: '#94a3b8', marginTop: '4px' }} />}
       </div>
     </div>
   )
@@ -204,24 +301,32 @@ function TxRow({ tx, onDelete, onEdit }) {
 
 // ─── TRANSACTION FORM ─────────────────────────────────────────────────────────
 function TransactionForm({ tx, userId, defaultType, onClose, onSaved }) {
-  const [type, setType]         = useState(tx?.type ?? defaultType ?? 'expense')
-  const [amount, setAmount]     = useState(tx?.amount?.toString() ?? '')
-  const [date, setDate]         = useState(tx?.date ?? format(new Date(), 'yyyy-MM-dd'))
-  const [description, setDesc]  = useState(tx?.description ?? '')
-  const [notes, setNotes]       = useState(tx?.notes ?? '')
-  const [categoryId, setCatId]  = useState(tx?.category_id ?? '')
-  const [categories, setCats]   = useState([])
-  const [loading, setLoading]   = useState(false)
-  const [error, setError]       = useState('')
+  const [type, setType]        = useState(tx?.type ?? defaultType ?? 'expense')
+  const [amount, setAmount]    = useState(tx?.amount?.toString() ?? '')
+  const [date, setDate]        = useState(tx?.date ?? format(new Date(), 'yyyy-MM-dd'))
+  const [description, setDesc] = useState(tx?.description ?? '')
+  const [notes, setNotes]      = useState(tx?.notes ?? '')
+  const [categoryId, setCatId] = useState(tx?.category_id ?? '')
+  const [categories, setCats]  = useState([])
+  const [loading, setLoading]  = useState(false)
+  const [error, setError]      = useState('')
+
+  // Scroll lock
+  useEffect(() => {
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = '' }
+  }, [])
 
   useEffect(() => {
     supabase.from('categories').select('*').eq('user_id', userId).eq('type', type).order('name')
       .then(({ data }) => setCats(data || []))
   }, [userId, type])
 
-  // Build hierarchical display
   const parents  = categories.filter(c => !c.parent_id)
   const children = categories.filter(c => c.parent_id)
+
+  const focusStyle = e => { e.target.style.borderColor = '#22c55e'; e.target.style.boxShadow = '0 0 0 3px rgba(34,197,94,0.12)' }
+  const blurStyle  = e => { e.target.style.borderColor = '#e2e8f0'; e.target.style.boxShadow = 'none' }
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -231,45 +336,30 @@ function TransactionForm({ tx, userId, defaultType, onClose, onSaved }) {
       return
     }
     setLoading(true)
-
     const payload = {
-      user_id: userId,
-      type,
-      amount: Number(amount),
-      date,
-      description,
-      notes,
+      user_id: userId, type,
+      amount: Number(amount), date, description, notes,
       category_id: categoryId || null,
     }
+    const { error } = tx
+      ? await supabase.from('transactions').update(payload).eq('id', tx.id)
+      : await supabase.from('transactions').insert(payload)
 
-    let err
-    if (tx) {
-      const { error } = await supabase.from('transactions').update(payload).eq('id', tx.id)
-      err = error
-    } else {
-      const { error } = await supabase.from('transactions').insert(payload)
-      err = error
-    }
-
-    if (err) setError(err.message)
+    if (error) setError(error.message)
     else onSaved()
     setLoading(false)
   }
 
-  const focusStyle = e => { e.target.style.borderColor = '#22c55e'; e.target.style.boxShadow = '0 0 0 3px rgba(34,197,94,0.12)' }
-  const blurStyle  = e => { e.target.style.borderColor = '#e2e8f0'; e.target.style.boxShadow = 'none' }
-
   const typeConfig = {
-    expense:    { label: 'Dépense',      color: '#ef4444', bg: 'rgba(239,68,68,0.1)'    },
-    income:     { label: 'Revenu',       color: '#22c55e', bg: 'rgba(34,197,94,0.1)'    },
-    investment: { label: 'Investissement', color: '#06b6d4', bg: 'rgba(6,182,212,0.1)'  },
+    expense:    { label: 'Dépense',        color: '#ef4444', bg: 'rgba(239,68,68,0.1)'   },
+    income:     { label: 'Revenu',         color: '#22c55e', bg: 'rgba(34,197,94,0.1)'   },
+    investment: { label: 'Investissement', color: '#06b6d4', bg: 'rgba(6,182,212,0.1)'   },
   }
 
   return (
     <>
       <div style={styles.backdrop} onClick={onClose} />
       <div style={styles.formSheet}>
-        {/* Header */}
         <div style={styles.formHeader}>
           <h2 style={styles.formTitle}>{tx ? 'Modifier' : 'Ajouter'}</h2>
           <button onClick={onClose} style={styles.closeBtn}><X size={20} /></button>
@@ -278,16 +368,12 @@ function TransactionForm({ tx, userId, defaultType, onClose, onSaved }) {
         {/* Type selector */}
         <div style={styles.typeRow}>
           {Object.entries(typeConfig).map(([key, cfg]) => (
-            <button
-              key={key}
+            <button key={key} type="button"
               onClick={() => { setType(key); setCatId('') }}
-              style={{
-                ...styles.typeBtn,
+              style={{ ...styles.typeBtn,
                 backgroundColor: type === key ? cfg.bg : '#f8fafc',
                 color: type === key ? cfg.color : '#94a3b8',
-                border: `2px solid ${type === key ? cfg.color : 'transparent'}`,
-              }}
-            >
+                border: `2px solid ${type === key ? cfg.color : 'transparent'}` }}>
               {cfg.label}
             </button>
           ))}
@@ -297,29 +383,19 @@ function TransactionForm({ tx, userId, defaultType, onClose, onSaved }) {
           {/* Amount */}
           <div style={styles.field}>
             <label style={styles.label}>Montant (€)</label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              value={amount}
+            <input type="number" step="0.01" min="0" value={amount}
               onChange={e => setAmount(e.target.value)}
-              placeholder="0.00"
-              required
-              autoFocus
+              placeholder="0.00" required autoFocus
               style={{ ...styles.input, fontSize: '1.5rem', fontFamily: 'monospace', fontWeight: '700', textAlign: 'center' }}
-              onFocus={focusStyle} onBlur={blurStyle}
-            />
+              onFocus={focusStyle} onBlur={blurStyle} />
           </div>
 
           {/* Category */}
           <div style={styles.field}>
             <label style={styles.label}>Catégorie</label>
             <div style={{ position: 'relative' }}>
-              <select
-                value={categoryId}
-                onChange={e => setCatId(e.target.value)}
-                style={{ ...styles.input, appearance: 'none', paddingRight: '2.5rem' }}
-              >
+              <select value={categoryId} onChange={e => setCatId(e.target.value)}
+                style={{ ...styles.input, appearance: 'none', paddingRight: '2.5rem' }}>
                 <option value="">Sans catégorie</option>
                 {parents.map(p => (
                   <optgroup key={p.id} label={`${p.icon} ${p.name}`}>
@@ -337,45 +413,31 @@ function TransactionForm({ tx, userId, defaultType, onClose, onSaved }) {
           {/* Date */}
           <div style={styles.field}>
             <label style={styles.label}>Date</label>
-            <input
-              type="date"
-              value={date}
-              onChange={e => setDate(e.target.value)}
-              required
-              style={styles.input}
-              onFocus={focusStyle} onBlur={blurStyle}
-            />
+            <input type="date" value={date} onChange={e => setDate(e.target.value)}
+              required style={styles.input} onFocus={focusStyle} onBlur={blurStyle} />
           </div>
 
           {/* Description */}
           <div style={styles.field}>
             <label style={styles.label}>Description</label>
-            <input
-              type="text"
-              value={description}
-              onChange={e => setDesc(e.target.value)}
+            <input type="text" value={description} onChange={e => setDesc(e.target.value)}
               placeholder="Ex: Courses Carrefour"
-              style={styles.input}
-              onFocus={focusStyle} onBlur={blurStyle}
-            />
+              style={styles.input} onFocus={focusStyle} onBlur={blurStyle} />
           </div>
 
           {/* Notes */}
           <div style={styles.field}>
             <label style={styles.label}>Notes (optionnel)</label>
-            <textarea
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              placeholder="Détails supplémentaires..."
-              rows={2}
+            <textarea value={notes} onChange={e => setNotes(e.target.value)}
+              placeholder="Détails supplémentaires..." rows={2}
               style={{ ...styles.input, resize: 'vertical' }}
-              onFocus={focusStyle} onBlur={blurStyle}
-            />
+              onFocus={focusStyle} onBlur={blurStyle} />
           </div>
 
           {error && <div style={styles.error}>{error}</div>}
 
-          <button type="submit" disabled={loading} style={{ ...styles.submitBtn, opacity: loading ? 0.6 : 1 }}>
+          <button type="submit" disabled={loading}
+            style={{ ...styles.submitBtn, opacity: loading ? 0.6 : 1 }}>
             {loading ? 'Enregistrement...' : tx ? 'Modifier' : 'Ajouter'}
           </button>
         </form>
@@ -393,14 +455,19 @@ const styles = {
   monthNav: { display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' },
   navBtn: { background: 'none', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.25rem 0.6rem', cursor: 'pointer', color: '#475569', fontSize: '1.1rem' },
   navLabel: { fontSize: '0.875rem', fontWeight: '600', color: '#475569', minWidth: '130px', textAlign: 'center', textTransform: 'capitalize' },
-  toolbar: { marginBottom: '1rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' },
-  searchWrap: { position: 'relative', display: 'flex', alignItems: 'center' },
+  searchWrap: { position: 'relative', display: 'flex', alignItems: 'center', marginBottom: '0.6rem' },
   searchIcon: { position: 'absolute', left: '0.75rem', color: '#94a3b8' },
-  searchInput: { width: '100%', padding: '0.65rem 0.75rem 0.65rem 2.2rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '0.875rem', outline: 'none', boxSizing: 'border-box', fontFamily: '"DM Sans", sans-serif', color: '#0f172a' },
+  searchInput: { width: '100%', padding: '0.65rem 0.75rem 0.65rem 2.2rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '16px', outline: 'none', boxSizing: 'border-box', fontFamily: '"DM Sans", sans-serif', color: '#0f172a' },
   clearBtn: { position: 'absolute', right: '0.75rem', background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', display: 'flex' },
-  filters: { display: 'flex', gap: '0.4rem', flexWrap: 'wrap' },
+  filterRow: { display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.5rem' },
   filterBtn: { padding: '0.3rem 0.75rem', borderRadius: '20px', border: '1px solid #e2e8f0', background: '#f8fafc', fontSize: '0.78rem', fontWeight: '500', cursor: 'pointer', color: '#64748b', fontFamily: '"DM Sans", sans-serif' },
   filterBtnActive: { backgroundColor: '#0f172a', color: '#fff', borderColor: '#0f172a' },
+  // Category filter
+  catFilterRow: { display: 'flex', gap: '0.4rem', overflowX: 'auto', paddingBottom: '0.5rem', marginBottom: '0.25rem', scrollbarWidth: 'none', msOverflowStyle: 'none' },
+  catFilterBtn: { padding: '0.25rem 0.65rem', borderRadius: '20px', border: '1px solid #e2e8f0', background: '#f8fafc', fontSize: '0.78rem', fontWeight: '500', cursor: 'pointer', color: '#64748b', fontFamily: '"DM Sans", sans-serif', whiteSpace: 'nowrap', flexShrink: 0, transition: 'all 0.15s' },
+  catFilterBtnActive: { backgroundColor: '#f0fdf4', color: '#16a34a', borderColor: '#86efac', fontWeight: '600' },
+  resultCount: { display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.75rem', color: '#94a3b8', marginBottom: '0.5rem' },
+  clearFiltersBtn: { background: 'none', border: 'none', color: '#22c55e', fontSize: '0.75rem', fontWeight: '600', cursor: 'pointer', padding: 0 },
   section: { marginBottom: '0.5rem' },
   sectionHeader: { display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.4rem 0.5rem', fontSize: '0.72rem', fontWeight: '600', color: '#94a3b8', letterSpacing: '0.05em', textTransform: 'uppercase' },
   dateHeader: { padding: '0.4rem 0.5rem', fontSize: '0.78rem', fontWeight: '600', color: '#64748b', textTransform: 'capitalize' },
@@ -416,7 +483,6 @@ const styles = {
   center: { textAlign: 'center', color: '#94a3b8', padding: '3rem 0' },
   empty: { textAlign: 'center', color: '#94a3b8', padding: '3rem 0', fontSize: '0.875rem' },
   emptyBtn: { marginTop: '0.75rem', padding: '0.6rem 1.25rem', background: 'linear-gradient(135deg,#22c55e,#16a34a)', border: 'none', borderRadius: '10px', color: '#fff', fontWeight: '600', cursor: 'pointer', fontFamily: '"DM Sans", sans-serif', fontSize: '0.875rem' },
-  // Form
   backdrop: { position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)', zIndex: 50 },
   formSheet: { position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: '500px', backgroundColor: '#fff', borderRadius: '24px 24px 0 0', zIndex: 51, padding: '1.5rem', maxHeight: '92vh', overflowY: 'auto', boxSizing: 'border-box' },
   formHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' },
@@ -427,7 +493,7 @@ const styles = {
   form: { display: 'flex', flexDirection: 'column', gap: '1rem' },
   field: { display: 'flex', flexDirection: 'column', gap: '0.35rem' },
   label: { fontSize: '0.72rem', fontWeight: '600', color: '#94a3b8', letterSpacing: '0.06em', textTransform: 'uppercase' },
-  input: { width: '100%', padding: '0.8rem 1rem', border: '1px solid #e2e8f0', borderRadius: '12px', fontSize: '0.95rem', outline: 'none', transition: 'border-color 0.2s, box-shadow 0.2s', boxSizing: 'border-box', fontFamily: '"DM Sans", sans-serif', color: '#0f172a', backgroundColor: '#fff' },
+  input: { width: '100%', padding: '0.8rem 1rem', border: '1px solid #e2e8f0', borderRadius: '12px', fontSize: '16px', outline: 'none', transition: 'border-color 0.2s, box-shadow 0.2s', boxSizing: 'border-box', fontFamily: '"DM Sans", sans-serif', color: '#0f172a', backgroundColor: '#fff' },
   error: { backgroundColor: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '10px', padding: '0.75rem', color: '#ef4444', fontSize: '0.875rem' },
   submitBtn: { width: '100%', background: 'linear-gradient(135deg,#22c55e,#16a34a)', border: 'none', borderRadius: '12px', padding: '0.9rem', color: '#fff', fontSize: '0.95rem', fontWeight: '600', cursor: 'pointer', boxShadow: '0 4px 12px rgba(34,197,94,0.25)', fontFamily: '"DM Sans", sans-serif', marginTop: '0.25rem' },
 }

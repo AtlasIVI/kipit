@@ -43,6 +43,10 @@ export default function Subscriptions() {
   // dans Subscriptions(), après les useState
   const [searchParams] = useSearchParams()
   useEffect(() => {
+  document.body.style.overflow = 'hidden'
+  return () => { document.body.style.overflow = '' }
+  }, [])
+  useEffect(() => {
     if (searchParams.get('add') === 'true') setShowForm(true)
   }, [searchParams])
 

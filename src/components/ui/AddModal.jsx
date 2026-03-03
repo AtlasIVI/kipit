@@ -1,5 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { TrendingDown, TrendingUp, RefreshCw, X } from 'lucide-react'
+import { useState, useEffect } from 'react'
+
 
 const options = [
   { label: 'Dépense',      icon: TrendingDown, color: '#ef4444',  bg: 'rgba(239,68,68,0.08)',   type: 'expense'      },
@@ -18,7 +20,10 @@ export default function AddModal({ onClose }) {
       navigate(`/transactions?type=${type}`)
     }
   }
-
+  useEffect(() => {
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = '' }
+  }, [])
   return (
     <>
       {/* Backdrop */}
