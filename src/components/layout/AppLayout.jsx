@@ -57,7 +57,7 @@ function Sidebar({ showAdd, profile, isAdmin, signOut }) {
     <aside style={styles.sidebar}>
       {/* Logo */}
       <div style={styles.sidebarLogo}>
-        <div style={styles.logoIcon}>💶</div>
+        <img src="/src/img/logo.png" alt="Logo" style={styles.logoIcon} />
         <span style={styles.logoText}>budget</span>
       </div>
 
@@ -210,13 +210,8 @@ const styles = {
   logoIcon: {
     width: '34px',
     height: '34px',
-    background: 'linear-gradient(135deg, #22c55e, #16a34a)',
     borderRadius: '10px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: '1rem',
-    boxShadow: '0 0 16px rgba(34,197,94,0.3)',
+    objectFit: 'contain',
   },
   logoText: {
     fontSize: '1.2rem',

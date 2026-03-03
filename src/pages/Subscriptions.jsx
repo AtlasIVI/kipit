@@ -4,6 +4,8 @@ import { useAuth } from '@/context/AuthContext'
 import { supabase } from '@/lib/supabase'
 import { format, parseISO, addMonths, addQuarters, addYears } from 'date-fns'
 import { fr } from 'date-fns/locale'
+import { useSearchParams } from 'react-router-dom'
+
 
 function fmt(amount) {
   return new Intl.NumberFormat('fr-BE', { style: 'currency', currency: 'EUR' }).format(amount)
@@ -38,6 +40,11 @@ export default function Subscriptions() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editSub, setEditSub]  = useState(null)
+  // dans Subscriptions(), après les useState
+  const [searchParams] = useSearchParams()
+  useEffect(() => {
+    if (searchParams.get('add') === 'true') setShowForm(true)
+  }, [searchParams])
 
   const loadSubs = useCallback(async () => {
     if (!user) return

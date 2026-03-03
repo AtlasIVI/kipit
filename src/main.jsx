@@ -6,6 +6,7 @@ import { ThemeProvider } from '@/context/ThemeContext'
 import AppRouter from '@/Router'
 import '@/index.css'
 
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>
