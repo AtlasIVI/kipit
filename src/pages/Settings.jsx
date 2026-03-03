@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import { useTheme } from '@/context/ThemeContext'
 import { supabase } from '@/lib/supabase'
-import { LogOut, ChevronRight, Sun, Moon, Monitor, Plus, Trash2, X, Shield, Pencil } from 'lucide-react'
+import { LogOut, ChevronRight, Sun, Moon, Monitor, Plus, Trash2, X, Pencil, TrendingUp } from 'lucide-react'
 import EmojiPicker from 'emoji-picker-react'
 
 function fmt(amount) {
@@ -22,14 +22,18 @@ export default function Settings() {
     navigate('/login')
   }
 
+  // ── Section routing ──
   if (section === 'profile')    return <ProfileSection    onBack={() => setSection(null)} />
   if (section === 'categories') return <CategoriesSection onBack={() => setSection(null)} />
   if (section === 'budget')     return <BudgetSection     onBack={() => setSection(null)} />
+  if (section === 'emergency')  return <EmergencyFundSection onBack={() => setSection(null)} />
+  if (section === 'investments') return <InvestmentsSection onBack={() => setSection(null)} />
 
   return (
     <div style={styles.root}>
       <h1 style={styles.title}>Paramètres</h1>
 
+      {/* Profile card */}
       <div style={styles.profileCard}>
         <div style={styles.avatar}>{profile?.full_name?.[0]?.toUpperCase() ?? '?'}</div>
         <div style={{ flex: 1 }}>
@@ -39,14 +43,18 @@ export default function Settings() {
         {isAdmin && <span style={styles.adminBadge}>Admin</span>}
       </div>
 
+      {/* Compte */}
       <div style={styles.group}>
         <div style={styles.groupLabel}>Compte</div>
         <SettingsRow label="Mon profil"        icon="👤" onPress={() => setSection('profile')} />
         <SettingsRow label="Catégories"        icon="🗂️" onPress={() => setSection('categories')} />
         <SettingsRow label="Limites de budget" icon="🎯" onPress={() => setSection('budget')} />
-        {isAdmin && <SettingsRow label="Administration" icon="🛡️" onPress={() => navigate('/admin')} />}
+        <SettingsRow label="Fonds d'urgence"   icon="🛡️" onPress={() => setSection('emergency')} />
+        <SettingsRow label="Investissements"   icon="📈" onPress={() => setSection('investments')} />
+        {isAdmin && <SettingsRow label="Administration" icon="⚙️" onPress={() => navigate('/admin')} />}
       </div>
 
+      {/* Apparence */}
       <div style={styles.group}>
         <div style={styles.groupLabel}>Apparence</div>
         <div style={styles.themeRow}>
@@ -63,6 +71,7 @@ export default function Settings() {
         </div>
       </div>
 
+      {/* App info */}
       <div style={styles.group}>
         <div style={styles.groupLabel}>Application</div>
         <SettingsRow label="Version" icon="ℹ️" value="1.0.0" />
@@ -135,8 +144,7 @@ function ProfileSection({ onBack }) {
           <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>L'email ne peut pas être modifié.</span>
         </div>
         {success && <div style={styles.successMsg}>✓ Profil mis à jour</div>}
-        <button type="submit" disabled={loading}
-          style={{ ...styles.submitBtn, opacity: loading ? 0.6 : 1 }}>
+        <button type="submit" disabled={loading} style={{ ...styles.submitBtn, opacity: loading ? 0.6 : 1 }}>
           {loading ? 'Enregistrement...' : 'Sauvegarder'}
         </button>
       </form>
@@ -194,31 +202,18 @@ function CategoriesSection({ onBack }) {
                   <span style={{ fontSize: '1rem' }}>{cat.icon}</span>
                   <span style={styles.catName}>{cat.name}</span>
                   <div style={{ display: 'flex', gap: '0.25rem' }}>
-                    <button onClick={() => { setEditCat(cat); setShowForm(true) }}
-                      style={styles.iconBtn} title="Modifier">
-                      <Pencil size={13} />
-                    </button>
-                    <button onClick={() => deleteCat(cat.id)}
-                      style={{ ...styles.iconBtn, color: '#ef4444' }} title="Supprimer">
-                      <Trash2 size={13} />
-                    </button>
+                    <button onClick={() => { setEditCat(cat); setShowForm(true) }} style={styles.iconBtn}><Pencil size={13} /></button>
+                    <button onClick={() => deleteCat(cat.id)} style={{ ...styles.iconBtn, color: '#ef4444' }}><Trash2 size={13} /></button>
                   </div>
                 </div>
-                {/* Children */}
                 {children.filter(c => c.parent_id === cat.id).map(child => (
                   <div key={child.id} style={{ ...styles.catRow, paddingLeft: '2.5rem' }}>
                     <span style={styles.catDot(child.color)} />
                     <span style={{ fontSize: '0.9rem' }}>{child.icon}</span>
                     <span style={{ ...styles.catName, color: '#64748b' }}>↳ {child.name}</span>
                     <div style={{ display: 'flex', gap: '0.25rem' }}>
-                      <button onClick={() => { setEditCat(child); setShowForm(true) }}
-                        style={styles.iconBtn} title="Modifier">
-                        <Pencil size={13} />
-                      </button>
-                      <button onClick={() => deleteCat(child.id)}
-                        style={{ ...styles.iconBtn, color: '#ef4444' }} title="Supprimer">
-                        <Trash2 size={13} />
-                      </button>
+                      <button onClick={() => { setEditCat(child); setShowForm(true) }} style={styles.iconBtn}><Pencil size={13} /></button>
+                      <button onClick={() => deleteCat(child.id)} style={{ ...styles.iconBtn, color: '#ef4444' }}><Trash2 size={13} /></button>
                     </div>
                   </div>
                 ))}
@@ -241,29 +236,28 @@ function CategoriesSection({ onBack }) {
   )
 }
 
-// ─── CATEGORY FORM (with emoji picker + budget limit) ─────────────────────────
+// ─── CATEGORY FORM ────────────────────────────────────────────────────────────
 function CategoryForm({ cat, userId, categories, onClose, onSaved }) {
-  const [name, setName]         = useState(cat?.name    ?? '')
-  const [icon, setIcon]         = useState(cat?.icon    ?? '📦')
-  const [color, setColor]       = useState(cat?.color   ?? '#6b7280')
-  const [type, setType]         = useState(cat?.type    ?? 'expense')
-  const [parentId, setParent]   = useState(cat?.parent_id ?? '')
-  const [budgetLimit, setLimit] = useState('')
-  const [loading, setLoading]   = useState(false)
+  const [name, setName]           = useState(cat?.name       ?? '')
+  const [icon, setIcon]           = useState(cat?.icon       ?? '📦')
+  const [color, setColor]         = useState(cat?.color      ?? '#6b7280')
+  const [type, setType]           = useState(cat?.type       ?? 'expense')
+  const [parentId, setParent]     = useState(cat?.parent_id  ?? '')
+  const [budgetLimit, setLimit]   = useState('')
+  const [loading, setLoading]     = useState(false)
   const [showEmoji, setShowEmoji] = useState(false)
-  const emojiRef = useRef(null)
+  const emojiRef  = useRef(null)
   const isDesktop = window.innerWidth >= 1024
-  const isParent  = !parentId // show budget limit only for parent categories
+  const isParent  = !parentId
 
-  // Load existing budget limit if editing
   useEffect(() => {
     if (cat && !cat.parent_id) {
-      supabase.from('budget_limits').select('amount').eq('user_id', userId).eq('category_id', cat.id).maybeSingle()
+      supabase.from('budget_limits').select('amount')
+        .eq('user_id', userId).eq('category_id', cat.id).maybeSingle()
         .then(({ data }) => { if (data) setLimit(data.amount.toString()) })
     }
   }, [cat, userId])
 
-  // Close emoji picker on outside click
   useEffect(() => {
     function handleClick(e) {
       if (emojiRef.current && !emojiRef.current.contains(e.target)) setShowEmoji(false)
@@ -272,7 +266,6 @@ function CategoryForm({ cat, userId, categories, onClose, onSaved }) {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
-  // Scroll lock
   useEffect(() => {
     document.body.style.overflow = 'hidden'
     return () => { document.body.style.overflow = '' }
@@ -280,14 +273,13 @@ function CategoryForm({ cat, userId, categories, onClose, onSaved }) {
 
   const focusStyle = e => { e.target.style.borderColor = '#22c55e'; e.target.style.boxShadow = '0 0 0 3px rgba(34,197,94,0.12)' }
   const blurStyle  = e => { e.target.style.borderColor = '#e2e8f0'; e.target.style.boxShadow = 'none' }
-
-  const parents = categories.filter(c => c.type === type && !c.parent_id && c.id !== cat?.id)
+  const parents    = categories.filter(c => c.type === type && !c.parent_id && c.id !== cat?.id)
+  const COLORS     = ['#22c55e','#3b82f6','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899','#64748b','#f97316','#14b8a6']
 
   async function handleSubmit(e) {
     e.preventDefault()
     setLoading(true)
     const payload = { user_id: userId, name, icon, color, type, parent_id: parentId || null }
-
     let categoryId = cat?.id
     if (cat) {
       await supabase.from('categories').update(payload).eq('id', cat.id)
@@ -295,27 +287,20 @@ function CategoryForm({ cat, userId, categories, onClose, onSaved }) {
       const { data } = await supabase.from('categories').insert(payload).select().single()
       categoryId = data?.id
     }
-
-    // Save budget limit if parent category and limit provided
     if (isParent && budgetLimit && Number(budgetLimit) > 0 && categoryId) {
-      const existing = await supabase.from('budget_limits')
+      const { data: existing } = await supabase.from('budget_limits')
         .select('id').eq('user_id', userId).eq('category_id', categoryId).maybeSingle()
-
-      if (existing.data) {
-        await supabase.from('budget_limits').update({ amount: Number(budgetLimit) }).eq('id', existing.data.id)
+      if (existing) {
+        await supabase.from('budget_limits').update({ amount: Number(budgetLimit) }).eq('id', existing.id)
       } else {
         await supabase.from('budget_limits').insert({ user_id: userId, category_id: categoryId, amount: Number(budgetLimit) })
       }
     } else if (isParent && (!budgetLimit || Number(budgetLimit) === 0) && categoryId && cat) {
-      // Remove limit if cleared
       await supabase.from('budget_limits').delete().eq('user_id', userId).eq('category_id', categoryId)
     }
-
     onSaved()
     setLoading(false)
   }
-
-  const COLORS = ['#22c55e','#3b82f6','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899','#64748b','#f97316','#14b8a6']
 
   return (
     <>
@@ -325,79 +310,55 @@ function CategoryForm({ cat, userId, categories, onClose, onSaved }) {
           <h2 style={styles.formTitle}>{cat ? 'Modifier la catégorie' : 'Nouvelle catégorie'}</h2>
           <button onClick={onClose} style={styles.closeBtn}><X size={20} /></button>
         </div>
-
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-
-          {/* Type selector */}
           <div style={styles.typeRow}>
             {['expense','income','investment'].map(t => (
               <button key={t} type="button" onClick={() => { setType(t); setParent('') }}
-                style={{ ...styles.typeBtn,
-                  backgroundColor: type === t ? '#0f172a' : '#f8fafc',
-                  color: type === t ? '#fff' : '#94a3b8',
-                  border: `2px solid ${type === t ? '#0f172a' : 'transparent'}` }}>
+                style={{ ...styles.typeBtn, backgroundColor: type === t ? '#0f172a' : '#f8fafc', color: type === t ? '#fff' : '#94a3b8', border: `2px solid ${type === t ? '#0f172a' : 'transparent'}` }}>
                 {t === 'expense' ? 'Dépense' : t === 'income' ? 'Revenu' : 'Investis'}
               </button>
             ))}
           </div>
 
-          {/* Icon + Name row */}
           <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-end' }}>
-            {/* Emoji picker */}
             <div style={{ ...styles.field, width: '70px', position: 'relative' }} ref={emojiRef}>
               <label style={styles.label}>Icône</label>
-              <button type="button"
-                onClick={() => setShowEmoji(v => !v)}
-                style={{ ...styles.input, width: '70px', textAlign: 'center', fontSize: '1.4rem',
-                  cursor: 'pointer', border: showEmoji ? '1px solid #22c55e' : '1px solid #e2e8f0',
+              <button type="button" onClick={() => setShowEmoji(v => !v)}
+                style={{ ...styles.input, width: '70px', textAlign: 'center', fontSize: '1.4rem', cursor: 'pointer',
+                  border: showEmoji ? '1px solid #22c55e' : '1px solid #e2e8f0',
                   boxShadow: showEmoji ? '0 0 0 3px rgba(34,197,94,0.12)' : 'none' }}>
                 {icon}
               </button>
               {showEmoji && (
-                <div style={{
-                  position: 'absolute',
-                  top: '100%',
-                  left: 0,
-                  zIndex: 100,
-                  marginTop: '4px',
-                  // On mobile: center it
-                  ...(isDesktop ? {} : { position: 'fixed', left: '50%', transform: 'translateX(-50%)', top: 'auto', bottom: '80px' })
-                }}>
-                  <EmojiPicker
-                    onEmojiClick={(e) => { setIcon(e.emoji); setShowEmoji(false) }}
-                    width={isDesktop ? 320 : 300}
-                    height={380}
-                    searchPlaceholder="Rechercher..."
-                    skinTonesDisabled
-                    previewConfig={{ showPreview: false }}
-                  />
+                <div style={{ position: isDesktop ? 'absolute' : 'fixed', top: isDesktop ? '100%' : 'auto',
+                  bottom: isDesktop ? 'auto' : '80px', left: isDesktop ? 0 : '50%',
+                  transform: isDesktop ? 'none' : 'translateX(-50%)', zIndex: 100, marginTop: '4px' }}>
+                  <EmojiPicker onEmojiClick={e => { setIcon(e.emoji); setShowEmoji(false) }}
+                    width={isDesktop ? 320 : 300} height={380}
+                    searchPlaceholder="Rechercher..." skinTonesDisabled
+                    previewConfig={{ showPreview: false }} />
                 </div>
               )}
             </div>
-
             <div style={{ ...styles.field, flex: 1 }}>
               <label style={styles.label}>Nom</label>
-              <input type="text" value={name} onChange={e => setName(e.target.value)}
-                required style={styles.input} onFocus={focusStyle} onBlur={blurStyle}
-                placeholder="Ex: Alimentation" />
+              <input type="text" value={name} onChange={e => setName(e.target.value)} required
+                style={styles.input} onFocus={focusStyle} onBlur={blurStyle} placeholder="Ex: Alimentation" />
             </div>
           </div>
 
-          {/* Color picker */}
           <div style={styles.field}>
             <label style={styles.label}>Couleur</label>
             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
               {COLORS.map(c => (
                 <button key={c} type="button" onClick={() => setColor(c)}
-                  style={{ width: '28px', height: '28px', borderRadius: '50%', backgroundColor: c,
+                  style={{ width: '28px', height: '28px', borderRadius: '50%', backgroundColor: c, cursor: 'pointer',
                     border: color === c ? '3px solid #0f172a' : '3px solid transparent',
-                    cursor: 'pointer', transition: 'transform 0.1s',
-                    transform: color === c ? 'scale(1.2)' : 'scale(1)' }} />
+                    transform: color === c ? 'scale(1.2)' : 'scale(1)', transition: 'transform 0.1s' }} />
               ))}
             </div>
           </div>
 
-          {/* Parent category */}
           {parents.length > 0 && (
             <div style={styles.field}>
               <label style={styles.label}>Catégorie parente (optionnel)</label>
@@ -408,31 +369,22 @@ function CategoryForm({ cat, userId, categories, onClose, onSaved }) {
             </div>
           )}
 
-          {/* Budget limit — only for parent categories (expense type) */}
           {isParent && type === 'expense' && (
             <div style={styles.field}>
               <label style={styles.label}>Limite mensuelle (optionnel)</label>
               <div style={{ position: 'relative' }}>
-                <input
-                  type="number" min="0" step="0.01"
-                  value={budgetLimit}
-                  onChange={e => setLimit(e.target.value)}
-                  placeholder="Ex: 300"
-                  style={{ ...styles.input, paddingRight: '2.5rem' }}
-                  onFocus={focusStyle} onBlur={blurStyle}
-                />
+                <input type="number" min="0" step="0.01" value={budgetLimit}
+                  onChange={e => setLimit(e.target.value)} placeholder="Ex: 300"
+                  style={{ ...styles.input, paddingRight: '2.5rem' }} onFocus={focusStyle} onBlur={blurStyle} />
                 <span style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', fontSize: '0.875rem', fontWeight: '600' }}>€</span>
               </div>
               {budgetLimit && Number(budgetLimit) > 0 && (
-                <span style={{ fontSize: '0.72rem', color: '#22c55e' }}>
-                  Limite de {fmt(Number(budgetLimit))} / mois
-                </span>
+                <span style={{ fontSize: '0.72rem', color: '#22c55e' }}>Limite de {fmt(Number(budgetLimit))} / mois</span>
               )}
             </div>
           )}
 
-          <button type="submit" disabled={loading}
-            style={{ ...styles.submitBtn, opacity: loading ? 0.6 : 1, marginTop: '0.5rem' }}>
+          <button type="submit" disabled={loading} style={{ ...styles.submitBtn, opacity: loading ? 0.6 : 1, marginTop: '0.5rem' }}>
             {loading ? 'Enregistrement...' : cat ? 'Modifier' : 'Créer'}
           </button>
         </form>
@@ -484,7 +436,6 @@ function BudgetSection({ onBack }) {
 
   const limitsMap        = Object.fromEntries(limits.map(l => [l.category_id, l]))
   const catsWithoutLimit = cats.filter(c => !limitsMap[c.id])
-
   const focusStyle = e => { e.target.style.borderColor = '#22c55e' }
   const blurStyle  = e => { e.target.style.borderColor = '#e2e8f0' }
 
@@ -494,7 +445,6 @@ function BudgetSection({ onBack }) {
       <p style={{ fontSize: '0.8rem', color: '#94a3b8', marginBottom: '1rem', marginTop: '-0.5rem' }}>
         Plafond mensuel par catégorie de dépense.
       </p>
-
       {loading ? <p style={{ color: '#94a3b8', textAlign: 'center' }}>Chargement...</p> : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
           {limits.map(lim => (
@@ -508,22 +458,18 @@ function BudgetSection({ onBack }) {
                     autoFocus onFocus={focusStyle} onBlur={blurStyle} />
                   <button onClick={() => saveLimit(lim.category_id, editVal)}
                     style={{ ...styles.submitBtn, padding: '0.4rem 0.75rem', fontSize: '0.8rem', marginTop: 0 }}>✓</button>
-                  <button onClick={() => setEditId(null)}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}><X size={16} /></button>
+                  <button onClick={() => setEditId(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}><X size={16} /></button>
                 </div>
               ) : (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span style={styles.limitAmt}
-                    onClick={() => { setEditId(lim.category_id); setEditVal(lim.amount) }}>
+                  <span style={styles.limitAmt} onClick={() => { setEditId(lim.category_id); setEditVal(lim.amount) }}>
                     {fmt(lim.amount)}/mois
                   </span>
-                  <button onClick={() => deleteLimit(lim.id)}
-                    style={{ ...styles.iconBtn, color: '#ef4444' }}><Trash2 size={14} /></button>
+                  <button onClick={() => deleteLimit(lim.id)} style={{ ...styles.iconBtn, color: '#ef4444' }}><Trash2 size={14} /></button>
                 </div>
               )}
             </div>
           ))}
-
           {catsWithoutLimit.length > 0 && (
             <>
               <div style={{ ...styles.groupLabel, marginTop: '0.75rem' }}>Ajouter une limite</div>
@@ -538,8 +484,7 @@ function BudgetSection({ onBack }) {
                         autoFocus placeholder="€" onFocus={focusStyle} onBlur={blurStyle} />
                       <button onClick={() => saveLimit(cat.id, editVal)}
                         style={{ ...styles.submitBtn, padding: '0.4rem 0.75rem', fontSize: '0.8rem', marginTop: 0 }}>✓</button>
-                      <button onClick={() => setEditId(null)}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}><X size={16} /></button>
+                      <button onClick={() => setEditId(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}><X size={16} /></button>
                     </div>
                   ) : (
                     <button onClick={() => { setEditId(cat.id); setEditVal('') }} style={styles.addLimitBtn}>
@@ -553,6 +498,289 @@ function BudgetSection({ onBack }) {
         </div>
       )}
     </div>
+  )
+}
+
+// ─── EMERGENCY FUND SECTION ───────────────────────────────────────────────────
+function EmergencyFundSection({ onBack }) {
+  const { user } = useAuth()
+  const [target,  setTarget]  = useState('')
+  const [current, setCurrent] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [success, setSuccess] = useState(false)
+
+  useEffect(() => {
+    supabase.from('profiles')
+      .select('emergency_fund_target, emergency_fund_current')
+      .eq('id', user.id).single()
+      .then(({ data }) => {
+        if (data) {
+          setTarget(data.emergency_fund_target?.toString() ?? '')
+          setCurrent(data.emergency_fund_current?.toString() ?? '')
+        }
+        setLoading(false)
+      })
+  }, [user])
+
+  const focusStyle = e => { e.target.style.borderColor = '#22c55e'; e.target.style.boxShadow = '0 0 0 3px rgba(34,197,94,0.12)' }
+  const blurStyle  = e => { e.target.style.borderColor = '#e2e8f0'; e.target.style.boxShadow = 'none' }
+
+  const pct = target && current
+    ? Math.min(Math.round((Number(current) / Number(target)) * 100), 100)
+    : 0
+
+  async function handleSave(e) {
+    e.preventDefault()
+    setLoading(true)
+    await supabase.from('profiles').update({
+      emergency_fund_target:  Number(target)  || 0,
+      emergency_fund_current: Number(current) || 0,
+    }).eq('id', user.id)
+    setSuccess(true)
+    setLoading(false)
+    setTimeout(() => setSuccess(false), 2000)
+  }
+
+  return (
+    <div style={styles.root}>
+      <BackHeader title="Fonds d'urgence" onBack={onBack} />
+      <div style={styles.sectionCard}>
+        <p style={{ margin: '0 0 1rem', fontSize: '0.825rem', color: '#64748b', lineHeight: 1.6 }}>
+          Le fonds d'urgence couvre 3 à 6 mois de dépenses en cas d'imprévu.
+          Chaque mois, le dashboard suggère d'y placer une partie du disponible.
+        </p>
+
+        {target && Number(target) > 0 && (
+          <div style={{ marginBottom: '1.25rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '0.4rem' }}>
+              <span style={{ fontWeight: '600', color: '#0f172a' }}>
+                {fmt(Number(current) || 0)} <span style={{ color: '#94a3b8', fontWeight: '400' }}>/ {fmt(Number(target))}</span>
+              </span>
+              <span style={{ fontWeight: '700', color: pct >= 100 ? '#22c55e' : '#f59e0b' }}>{pct}%</span>
+            </div>
+            <div style={{ height: '8px', backgroundColor: '#f1f5f9', borderRadius: '4px', overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${pct}%`, borderRadius: '4px', transition: 'width 0.5s ease',
+                backgroundColor: pct >= 100 ? '#22c55e' : pct >= 50 ? '#f59e0b' : '#ef4444' }} />
+            </div>
+            {pct >= 100 && <p style={{ margin: '0.5rem 0 0', fontSize: '0.78rem', color: '#16a34a', fontWeight: '600' }}>🎉 Objectif atteint !</p>}
+          </div>
+        )}
+
+        <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div style={styles.field}>
+            <label style={styles.label}>Objectif cible (€)</label>
+            <div style={{ position: 'relative' }}>
+              <input type="number" min="0" step="0.01" value={target} onChange={e => setTarget(e.target.value)}
+                placeholder="Ex: 5000" style={{ ...styles.input, paddingRight: '2.5rem' }} onFocus={focusStyle} onBlur={blurStyle} />
+              <span style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', fontSize: '0.875rem', fontWeight: '600' }}>€</span>
+            </div>
+          </div>
+          <div style={styles.field}>
+            <label style={styles.label}>Montant actuel (€)</label>
+            <div style={{ position: 'relative' }}>
+              <input type="number" min="0" step="0.01" value={current} onChange={e => setCurrent(e.target.value)}
+                placeholder="Ex: 1500" style={{ ...styles.input, paddingRight: '2.5rem' }} onFocus={focusStyle} onBlur={blurStyle} />
+              <span style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', fontSize: '0.875rem', fontWeight: '600' }}>€</span>
+            </div>
+            <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>Mets à jour ce montant chaque fois que tu alimentes ton fonds.</span>
+          </div>
+          {success && <div style={styles.successMsg}>✓ Fonds d'urgence mis à jour</div>}
+          <button type="submit" disabled={loading} style={{ ...styles.submitBtn, opacity: loading ? 0.6 : 1 }}>
+            {loading ? 'Enregistrement...' : 'Sauvegarder'}
+          </button>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+// ─── INVESTMENTS SECTION ──────────────────────────────────────────────────────
+function InvestmentsSection({ onBack }) {
+  const { user } = useAuth()
+  const [txs, setTxs]         = useState([])
+  const [cats, setCats]       = useState([])
+  const [loading, setLoading] = useState(true)
+  const [showForm, setShowForm] = useState(false)
+
+  async function load() {
+    setLoading(true)
+    const [{ data: t }, { data: c }] = await Promise.all([
+      supabase.from('transactions')
+        .select('*, category:categories(id,name,icon,color)')
+        .eq('user_id', user.id).eq('type', 'investment').eq('is_virtual', false)
+        .order('date', { ascending: false }).limit(20),
+      supabase.from('categories').select('*').eq('user_id', user.id).eq('type', 'investment').order('name')
+    ])
+    setTxs(t  || [])
+    setCats(c || [])
+    setLoading(false)
+  }
+
+  useEffect(() => { load() }, [])
+
+  async function deleteTx(id) {
+    await supabase.from('transactions').delete().eq('id', id)
+    setTxs(prev => prev.filter(t => t.id !== id))
+  }
+
+  const total = txs.reduce((acc, t) => acc + Number(t.amount), 0)
+
+  // Group by category
+  const byCategory = {}
+  txs.forEach(t => {
+    const key = t.category?.name ?? 'Sans catégorie'
+    if (!byCategory[key]) byCategory[key] = { icon: t.category?.icon ?? '📈', color: t.category?.color ?? '#06b6d4', total: 0 }
+    byCategory[key].total += Number(t.amount)
+  })
+
+  return (
+    <div style={styles.root}>
+      <BackHeader title="Investissements" onBack={onBack} />
+
+      {/* Summary */}
+      <div style={{ ...styles.sectionCard, marginBottom: '1rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div style={{ fontSize: '0.72rem', fontWeight: '600', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>Capital total investi</div>
+            <div style={{ fontSize: '1.6rem', fontWeight: '700', color: '#06b6d4', fontFamily: 'monospace' }}>{fmt(total)}</div>
+          </div>
+          <button onClick={() => setShowForm(true)} style={{ ...styles.submitBtn, width: 'auto', padding: '0.6rem 1rem', fontSize: '0.875rem', marginTop: 0, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <Plus size={16} /> Ajouter
+          </button>
+        </div>
+
+        {/* By category */}
+        {Object.entries(byCategory).length > 0 && (
+          <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            {Object.entries(byCategory).sort((a,b) => b[1].total - a[1].total).map(([name, data]) => {
+              const pct = total > 0 ? Math.round((data.total / total) * 100) : 0
+              return (
+                <div key={name}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+                    <span>{data.icon}</span>
+                    <span style={{ flex: 1, fontSize: '0.875rem', fontWeight: '500', color: '#0f172a' }}>{name}</span>
+                    <span style={{ fontSize: '0.875rem', fontWeight: '700', fontFamily: 'monospace', color: '#06b6d4' }}>{fmt(data.total)}</span>
+                    <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>{pct}%</span>
+                  </div>
+                  <div style={{ height: '3px', backgroundColor: '#f1f5f9', borderRadius: '2px', overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${pct}%`, backgroundColor: data.color ?? '#06b6d4', borderRadius: '2px' }} />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Recent transactions */}
+      <div style={styles.groupLabel}>Historique récent</div>
+      {loading ? <p style={{ color: '#94a3b8', textAlign: 'center' }}>Chargement...</p> : txs.length === 0 ? (
+        <p style={{ color: '#94a3b8', textAlign: 'center', padding: '2rem 0' }}>Aucun investissement enregistré.</p>
+      ) : (
+        <div style={{ backgroundColor: '#fff', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 1px 12px rgba(0,0,0,0.06)', border: '1px solid #f1f5f9' }}>
+          {txs.map(t => (
+            <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem', borderBottom: '1px solid #f8fafc' }}>
+              <div style={{ width: '36px', height: '36px', borderRadius: '10px', backgroundColor: 'rgba(6,182,212,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', flexShrink: 0 }}>
+                {t.category?.icon ?? '📈'}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: '0.875rem', fontWeight: '600', color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {t.description || t.category?.name || '—'}
+                </div>
+                <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>{t.date}</div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
+                <span style={{ fontSize: '0.9rem', fontWeight: '700', fontFamily: 'monospace', color: '#06b6d4' }}>+{fmt(t.amount)}</span>
+                <button onClick={() => deleteTx(t.id)} style={{ ...styles.iconBtn, color: '#ef4444' }}><Trash2 size={13} /></button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {showForm && (
+        <InvestmentForm
+          userId={user.id}
+          categories={cats}
+          onClose={() => setShowForm(false)}
+          onSaved={() => { setShowForm(false); load() }}
+        />
+      )}
+    </div>
+  )
+}
+
+// ─── INVESTMENT FORM ──────────────────────────────────────────────────────────
+function InvestmentForm({ userId, categories, onClose, onSaved }) {
+  const [amount, setAmount]   = useState('')
+  const [date, setDate]       = useState(new Date().toISOString().split('T')[0])
+  const [description, setDesc] = useState('')
+  const [categoryId, setCatId] = useState(categories[0]?.id ?? '')
+  const [loading, setLoading]  = useState(false)
+  const [error, setError]      = useState('')
+
+  useEffect(() => {
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = '' }
+  }, [])
+
+  const focusStyle = e => { e.target.style.borderColor = '#22c55e'; e.target.style.boxShadow = '0 0 0 3px rgba(34,197,94,0.12)' }
+  const blurStyle  = e => { e.target.style.borderColor = '#e2e8f0'; e.target.style.boxShadow = 'none' }
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    if (!amount || Number(amount) <= 0) { setError('Montant invalide.'); return }
+    setLoading(true)
+    const { error } = await supabase.from('transactions').insert({
+      user_id: userId, type: 'investment',
+      amount: Number(amount), date, description,
+      category_id: categoryId || null,
+      is_virtual: false, is_locked: false,
+    })
+    if (error) setError(error.message)
+    else onSaved()
+    setLoading(false)
+  }
+
+  return (
+    <>
+      <div style={styles.backdrop} onClick={onClose} />
+      <div style={styles.formSheet}>
+        <div style={styles.formHeader}>
+          <h2 style={styles.formTitle}>Nouvel investissement</h2>
+          <button onClick={onClose} style={styles.closeBtn}><X size={20} /></button>
+        </div>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div style={styles.field}>
+            <label style={styles.label}>Montant (€)</label>
+            <input type="number" step="0.01" min="0" value={amount} onChange={e => setAmount(e.target.value)}
+              placeholder="0.00" required autoFocus
+              style={{ ...styles.input, fontSize: '1.5rem', fontFamily: 'monospace', fontWeight: '700', textAlign: 'center' }}
+              onFocus={focusStyle} onBlur={blurStyle} />
+          </div>
+          <div style={styles.field}>
+            <label style={styles.label}>Catégorie</label>
+            <select value={categoryId} onChange={e => setCatId(e.target.value)} style={styles.input}>
+              <option value="">Sans catégorie</option>
+              {categories.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
+            </select>
+          </div>
+          <div style={styles.field}>
+            <label style={styles.label}>Date</label>
+            <input type="date" value={date} onChange={e => setDate(e.target.value)} required style={styles.input} onFocus={focusStyle} onBlur={blurStyle} />
+          </div>
+          <div style={styles.field}>
+            <label style={styles.label}>Description</label>
+            <input type="text" value={description} onChange={e => setDesc(e.target.value)}
+              placeholder="Ex: Achat ETF World" style={styles.input} onFocus={focusStyle} onBlur={blurStyle} />
+          </div>
+          {error && <div style={{ backgroundColor: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '10px', padding: '0.75rem', color: '#ef4444', fontSize: '0.875rem' }}>{error}</div>}
+          <button type="submit" disabled={loading} style={{ ...styles.submitBtn, opacity: loading ? 0.6 : 1 }}>
+            {loading ? 'Enregistrement...' : 'Ajouter'}
+          </button>
+        </form>
+      </div>
+    </>
   )
 }
 
@@ -578,6 +806,7 @@ const styles = {
   backHeader: { display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' },
   backBtn: { background: 'none', border: 'none', color: '#22c55e', fontWeight: '600', cursor: 'pointer', fontSize: '0.875rem', padding: 0, fontFamily: '"DM Sans", sans-serif' },
   subTitle: { margin: 0, fontSize: '1.2rem', fontWeight: '700', color: '#0f172a', fontFamily: '"Sora", sans-serif' },
+  sectionCard: { backgroundColor: '#fff', borderRadius: '16px', padding: '1.25rem', boxShadow: '0 1px 12px rgba(0,0,0,0.06)', border: '1px solid #f1f5f9' },
   addRowBtn: { display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.65rem 1rem', backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '10px', color: '#16a34a', fontWeight: '600', cursor: 'pointer', fontSize: '0.875rem', fontFamily: '"DM Sans", sans-serif', marginBottom: '1rem' },
   catRow: { display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1rem', borderBottom: '1px solid #f8fafc' },
   catDot: (color) => ({ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: color, flexShrink: 0 }),

@@ -57,8 +57,8 @@ function Sidebar({ showAdd, profile, isAdmin, signOut }) {
     <aside style={styles.sidebar}>
       {/* Logo */}
       <div style={styles.sidebarLogo}>
-        <img src="/src/img/logo.png" alt="Logo" style={styles.logoIcon} />
-        <span style={styles.logoText}>budget</span>
+        <img src="/src/img/logo.svg" alt="Logo" style={styles.logoIcon} />
+        <span style={styles.logoText}>Kipit</span>
       </div>
 
       {/* Add button */}

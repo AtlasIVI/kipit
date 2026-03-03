@@ -10,8 +10,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png'],
       manifest: {
-        name: 'Budget App',
-        short_name: 'Budget',
+        name: 'Kipit App',
+        short_name: 'Kipit',
         description: 'Personal budget tracking app',
         theme_color: '#0f172a',
         background_color: '#0f172a',
