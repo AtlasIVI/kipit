@@ -383,7 +383,7 @@ function TransactionForm({ tx, userId, defaultType, onClose, onSaved }) {
           {/* Amount */}
           <div style={styles.field}>
             <label style={styles.label}>Montant (€)</label>
-            <input type="number" step="0.01" min="0" value={amount}
+            <input type="number" inputMode="decimal" step="0.01" min="0" value={amount}
               onChange={e => setAmount(e.target.value)}
               placeholder="0.00" required autoFocus
               style={{ ...styles.input, fontSize: '1.5rem', fontFamily: 'monospace', fontWeight: '700', textAlign: 'center' }}

@@ -373,7 +373,7 @@ function CategoryForm({ cat, userId, categories, onClose, onSaved }) {
             <div style={styles.field}>
               <label style={styles.label}>Limite mensuelle (optionnel)</label>
               <div style={{ position: 'relative' }}>
-                <input type="number" min="0" step="0.01" value={budgetLimit}
+                <input type="number" inputMode="decimal" min="0" step="0.01" value={budgetLimit}
                   onChange={e => setLimit(e.target.value)} placeholder="Ex: 300"
                   style={{ ...styles.input, paddingRight: '2.5rem' }} onFocus={focusStyle} onBlur={blurStyle} />
                 <span style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', fontSize: '0.875rem', fontWeight: '600' }}>€</span>
@@ -453,7 +453,7 @@ function BudgetSection({ onBack }) {
               <span style={styles.limitName}>{lim.category?.name}</span>
               {editId === lim.category_id ? (
                 <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-                  <input type="number" value={editVal} onChange={e => setEditVal(e.target.value)}
+                  <input type="number" inputMode="decimal" value={editVal} onChange={e => setEditVal(e.target.value)}
                     style={{ ...styles.input, width: '90px', padding: '0.4rem 0.6rem', fontSize: '0.85rem' }}
                     autoFocus onFocus={focusStyle} onBlur={blurStyle} />
                   <button onClick={() => saveLimit(lim.category_id, editVal)}
@@ -479,7 +479,7 @@ function BudgetSection({ onBack }) {
                   <span style={styles.limitName}>{cat.name}</span>
                   {editId === cat.id ? (
                     <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-                      <input type="number" value={editVal} onChange={e => setEditVal(e.target.value)}
+                      <input type="number" inputMode="decimal" value={editVal} onChange={e => setEditVal(e.target.value)}
                         style={{ ...styles.input, width: '90px', padding: '0.4rem 0.6rem', fontSize: '0.85rem' }}
                         autoFocus placeholder="€" onFocus={focusStyle} onBlur={blurStyle} />
                       <button onClick={() => saveLimit(cat.id, editVal)}
@@ -570,7 +570,7 @@ function EmergencyFundSection({ onBack }) {
           <div style={styles.field}>
             <label style={styles.label}>Objectif cible (€)</label>
             <div style={{ position: 'relative' }}>
-              <input type="number" min="0" step="0.01" value={target} onChange={e => setTarget(e.target.value)}
+              <input type="number" inputMode="decimal" min="0" step="0.01" value={target} onChange={e => setTarget(e.target.value)}
                 placeholder="Ex: 5000" style={{ ...styles.input, paddingRight: '2.5rem' }} onFocus={focusStyle} onBlur={blurStyle} />
               <span style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', fontSize: '0.875rem', fontWeight: '600' }}>€</span>
             </div>
@@ -578,7 +578,7 @@ function EmergencyFundSection({ onBack }) {
           <div style={styles.field}>
             <label style={styles.label}>Montant actuel (€)</label>
             <div style={{ position: 'relative' }}>
-              <input type="number" min="0" step="0.01" value={current} onChange={e => setCurrent(e.target.value)}
+              <input type="number" inputMode="decimal" min="0" step="0.01" value={current} onChange={e => setCurrent(e.target.value)}
                 placeholder="Ex: 1500" style={{ ...styles.input, paddingRight: '2.5rem' }} onFocus={focusStyle} onBlur={blurStyle} />
               <span style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', fontSize: '0.875rem', fontWeight: '600' }}>€</span>
             </div>
@@ -753,7 +753,7 @@ function InvestmentForm({ userId, categories, onClose, onSaved }) {
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <div style={styles.field}>
             <label style={styles.label}>Montant (€)</label>
-            <input type="number" step="0.01" min="0" value={amount} onChange={e => setAmount(e.target.value)}
+            <input type="number" inputMode="decimal" step="0.01" min="0" value={amount} onChange={e => setAmount(e.target.value)}
               placeholder="0.00" required autoFocus
               style={{ ...styles.input, fontSize: '1.5rem', fontFamily: 'monospace', fontWeight: '700', textAlign: 'center' }}
               onFocus={focusStyle} onBlur={blurStyle} />

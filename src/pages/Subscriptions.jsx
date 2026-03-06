@@ -324,7 +324,7 @@ function SubscriptionForm({ sub, userId, onClose, onSaved }) {
           <div style={{ display: 'flex', gap: '0.75rem' }}>
             <div style={{ ...styles.field, flex: 1 }}>
               <label style={styles.label}>Montant (€)</label>
-              <input type="number" step="0.01" min="0" value={amount}
+              <input type="number" inputMode="decimal" step="0.01" min="0" value={amount}
                 onChange={e => setAmount(e.target.value)} placeholder="0.00" required
                 style={{ ...styles.input, fontFamily: 'monospace', fontWeight: '700', fontSize: '1.1rem', textAlign: 'center' }}
                 onFocus={focusStyle} onBlur={blurStyle} />
