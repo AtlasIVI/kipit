@@ -63,18 +63,22 @@ function MonthlyReport({ currentMonth, setCurrentMonth }) {
     const from = format(startOfMonth(currentMonth), 'yyyy-MM-dd')
     const to   = format(endOfMonth(currentMonth),   'yyyy-MM-dd')
 
-    // Current month transactions
-    const { data: txs } = await supabase
-      .from('transactions')
-      .select('*, category:categories(id, name, icon, color, parent_id, type)')
-      .eq('user_id', user.id)
-      .gte('date', from).lte('date', to)
-
-    // Budget limits
-    const { data: limits } = await supabase
-      .from('budget_limits')
-      .select('*, category:categories(id, name, icon, color)')
-      .eq('user_id', user.id)
+    const [{ data: txs }, { data: limits }, { data: categories }] = await Promise.all([
+      supabase
+        .from('transactions')
+        .select('*, category:categories(id, name, icon, color, parent_id, type)')
+        .eq('user_id', user.id)
+        .gte('date', from).lte('date', to),
+      supabase
+        .from('budget_limits')
+        .select('*, category:categories(id, name, icon, color)')
+        .eq('user_id', user.id),
+      supabase
+        .from('categories')
+        .select('id, name, icon, color, parent_id, type')
+        .eq('type', 'expense')
+        .or(`user_id.eq.${user.id},user_id.is.null`),
+    ])
 
     // Last 6 months for trend
     const trendMonths = Array.from({ length: 6 }, (_, i) => subMonths(currentMonth, 5 - i))
@@ -91,7 +95,7 @@ function MonthlyReport({ currentMonth, setCurrentMonth }) {
       return { month: format(m, 'MMM', { locale: fr }), expense, income }
     }))
 
-    setData({ txs: txs || [], limits: limits || [], trendData })
+    setData({ txs: txs || [], limits: limits || [], categories: categories || [], trendData })
     setLoading(false)
   }, [user, currentMonth])
 
@@ -100,17 +104,41 @@ function MonthlyReport({ currentMonth, setCurrentMonth }) {
   if (loading) return <LoadingSkeleton />
   if (!data)   return null
 
-  // Category breakdown (expenses only, top-level)
+  // Category breakdown (all categories, including 0 expense and no limit)
+  const categoriesById = Object.fromEntries((data.categories || []).map(c => [c.id, c]))
   const catMap = {}
+  ;(data.categories || []).filter(c => !c.parent_id).forEach(cat => {
+    catMap[cat.id] = { name: cat.name, icon: cat.icon, color: cat.color, value: 0, id: cat.id }
+  })
+
   data.txs.filter(t => t.type === 'expense' && !t.is_virtual).forEach(t => {
     const cat = t.category
     if (!cat) return
     const key = cat.parent_id ?? cat.id
-    if (!catMap[key]) catMap[key] = { name: cat.parent_id ? '...' : cat.name, icon: cat.icon, color: cat.color, value: 0 }
-    if (!cat.parent_id) { catMap[key].name = cat.name; catMap[key].icon = cat.icon; catMap[key].color = cat.color }
+    const parent = cat.parent_id ? categoriesById[cat.parent_id] : cat
+    if (!catMap[key]) {
+      catMap[key] = {
+        name: parent?.name || cat.name || 'Sans categorie',
+        icon: parent?.icon || cat.icon,
+        color: parent?.color || cat.color,
+        value: 0,
+        id: key,
+      }
+    }
+
+    if (!cat.parent_id) {
+      catMap[key].name = cat.name
+      catMap[key].icon = cat.icon
+      catMap[key].color = cat.color
+    }
+
     catMap[key].value += Number(t.amount)
   })
-  const pieData = Object.values(catMap).sort((a, b) => b.value - a.value)
+  const allCategoryRows = Object.values(catMap).sort((a, b) => {
+    if (b.value !== a.value) return b.value - a.value
+    return String(a.name).localeCompare(String(b.name), 'fr')
+  })
+  const pieData = allCategoryRows.filter(c => c.value > 0)
 
   // Totals
   const totalExpense    = data.txs.filter(t => t.type === 'expense').reduce((a, t) => a + Number(t.amount), 0)
@@ -122,7 +150,7 @@ function MonthlyReport({ currentMonth, setCurrentMonth }) {
   const limitsMap = Object.fromEntries(data.limits.map(l => [l.category_id, l.amount]))
   const limitRows = data.limits.map(l => {
     const spent = catMap[l.category_id]?.value ?? 0
-    const pct   = Math.round((spent / l.amount) * 100)
+    const pct   = l.amount > 0 ? Math.round((spent / l.amount) * 100) : 0
     const status = pct >= 100 ? 'over' : pct >= 80 ? 'warn' : 'ok'
     return { ...l, spent, pct, status }
   })
@@ -198,6 +226,30 @@ function MonthlyReport({ currentMonth, setCurrentMonth }) {
         </div>
       )}
 
+      {/* All categories tracking */}
+      {allCategoryRows.length > 0 && (
+        <div style={styles.card}>
+          <h3 style={styles.cardTitle}>Toutes les catégories</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
+            {allCategoryRows.map(row => {
+              const limit = limitsMap[row.id]
+              return (
+                <div key={row.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span style={{ fontSize: '0.95rem' }}>{row.icon || '•'}</span>
+                  <span style={{ flex: 1, fontSize: '0.83rem', color: '#334155' }}>{row.name}</span>
+                  <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
+                    {limit ? `Limite: ${fmt(limit)}` : 'Sans limite'}
+                  </span>
+                  <span style={{ fontSize: '0.82rem', fontWeight: '700', color: row.value > 0 ? '#0f172a' : '#94a3b8' }}>
+                    {fmtFull(row.value)}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {/* 6-month trend */}
       <div style={styles.card}>
         <h3 style={styles.cardTitle}>Tendance 6 mois</h3>
@@ -229,18 +281,24 @@ function YearlyReport({ year }) {
       const from = format(startOfYear(new Date(year, 0)), 'yyyy-MM-dd')
       const to   = format(endOfYear(new Date(year, 0)),   'yyyy-MM-dd')
 
-      const { data: txs } = await supabase
-        .from('transactions')
-        .select('*, category:categories(id, name, icon, color, parent_id, type)')
-        .eq('user_id', user.id)
-        .gte('date', from).lte('date', to)
+      const [{ data: txs }, { data: limits }, { data: categories }] = await Promise.all([
+        supabase
+          .from('transactions')
+          .select('*, category:categories(id, name, icon, color, parent_id, type)')
+          .eq('user_id', user.id)
+          .gte('date', from).lte('date', to),
+        supabase
+          .from('budget_limits')
+          .select('*, category:categories(id, name, icon, color)')
+          .eq('user_id', user.id),
+        supabase
+          .from('categories')
+          .select('id, name, icon, color, parent_id, type')
+          .eq('type', 'expense')
+          .or(`user_id.eq.${user.id},user_id.is.null`),
+      ])
 
-      const { data: limits } = await supabase
-        .from('budget_limits')
-        .select('*, category:categories(id, name, icon, color)')
-        .eq('user_id', user.id)
-
-      setData({ txs: txs || [], limits: limits || [] })
+      setData({ txs: txs || [], limits: limits || [], categories: categories || [] })
       setLoading(false)
     }
     load()
@@ -267,17 +325,41 @@ function YearlyReport({ year }) {
   const totalInvestment = data.txs.filter(t => t.type === 'investment').reduce((a, t) => a + Number(t.amount), 0)
   const yearlySavings   = totalIncome > 0 ? Math.round(((totalIncome - totalExpense) / totalIncome) * 100) : 0
 
-  // Category breakdown for the year
+  // Category breakdown for the year (all categories, including 0 expense and no limit)
+  const categoriesById = Object.fromEntries((data.categories || []).map(c => [c.id, c]))
   const catMap = {}
+  ;(data.categories || []).filter(c => !c.parent_id).forEach(cat => {
+    catMap[cat.id] = { name: cat.name, icon: cat.icon, color: cat.color, value: 0, id: cat.id }
+  })
+
   data.txs.filter(t => t.type === 'expense' && !t.is_virtual).forEach(t => {
     const cat = t.category
     if (!cat) return
     const key = cat.parent_id ?? cat.id
-    if (!catMap[key]) catMap[key] = { name: cat.parent_id ? '...' : cat.name, icon: cat.icon, color: cat.color, value: 0 }
-    if (!cat.parent_id) { catMap[key].name = cat.name; catMap[key].icon = cat.icon; catMap[key].color = cat.color }
+    const parent = cat.parent_id ? categoriesById[cat.parent_id] : cat
+    if (!catMap[key]) {
+      catMap[key] = {
+        name: parent?.name || cat.name || 'Sans categorie',
+        icon: parent?.icon || cat.icon,
+        color: parent?.color || cat.color,
+        value: 0,
+        id: key,
+      }
+    }
+
+    if (!cat.parent_id) {
+      catMap[key].name = cat.name
+      catMap[key].icon = cat.icon
+      catMap[key].color = cat.color
+    }
+
     catMap[key].value += Number(t.amount)
   })
-  const pieData = Object.values(catMap).sort((a, b) => b.value - a.value)
+  const allCategoryRows = Object.values(catMap).sort((a, b) => {
+    if (b.value !== a.value) return b.value - a.value
+    return String(a.name).localeCompare(String(b.name), 'fr')
+  })
+  const pieData = allCategoryRows.filter(c => c.value > 0)
 
   // Budget heatmap: for each limit, each month status
   const heatmapData = data.limits.map(lim => {
@@ -391,6 +473,28 @@ function YearlyReport({ year }) {
               }} />
             </PieChart>
           </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* All categories tracking */}
+      {allCategoryRows.length > 0 && (
+        <div style={styles.card}>
+          <h3 style={styles.cardTitle}>Toutes les catégories</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
+            {allCategoryRows.map(row => {
+              const hasLimit = data.limits.some(l => l.category_id === row.id)
+              return (
+                <div key={row.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span style={{ fontSize: '0.95rem' }}>{row.icon || '•'}</span>
+                  <span style={{ flex: 1, fontSize: '0.83rem', color: '#334155' }}>{row.name}</span>
+                  <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>{hasLimit ? 'Avec limite' : 'Sans limite'}</span>
+                  <span style={{ fontSize: '0.82rem', fontWeight: '700', color: row.value > 0 ? '#0f172a' : '#94a3b8' }}>
+                    {fmtFull(row.value)}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
 

@@ -21,7 +21,7 @@ function useDashboard(currentMonth) {
       setLoading(true)
       const from = format(startOfMonth(currentMonth), 'yyyy-MM-dd')
       const to   = format(endOfMonth(currentMonth),   'yyyy-MM-dd')
-      const [{ data: txs }, { data: subs }, { data: limits }, { data: profile }, { data: allTxs }] = await Promise.all([
+      const [{ data: txs }, { data: subs }, { data: limits }, { data: profile }, { data: allTxs }, { data: categories }] = await Promise.all([
         supabase.from('transactions').select('*, category:categories(id,name,icon,color,type,parent_id)')
           .eq('user_id', user.id).gte('date', from).lte('date', to).order('date', { ascending: false }),
         supabase.from('recurring_rules').select('*, category:categories(id,name,icon,color)')
@@ -29,8 +29,16 @@ function useDashboard(currentMonth) {
         supabase.from('budget_limits').select('*, category:categories(id,name,icon,color)').eq('user_id', user.id),
         supabase.from('profiles').select('emergency_fund_target,emergency_fund_current').eq('id', user.id).single(),
         supabase.from('transactions').select('amount,type,date').eq('user_id', user.id).eq('type', 'investment').eq('is_virtual', false),
+        supabase.from('categories').select('id,name,icon,color,parent_id').eq('type', 'expense').or(`user_id.eq.${user.id},user_id.is.null`),
       ])
-      setData({ txs: txs || [], subs: subs || [], limits: limits || [], profile: profile || {}, allInvestments: allTxs || [] })
+      setData({
+        txs: txs || [],
+        subs: subs || [],
+        limits: limits || [],
+        profile: profile || {},
+        allInvestments: allTxs || [],
+        categories: categories || [],
+      })
       setLoading(false)
     }
     load()
@@ -88,7 +96,7 @@ export default function Home() {
             {(totals.investment > 0 || cumulativeInvested > 0) && (
               <InvestCard totals={totals} cumulativeInvested={cumulativeInvested} />
             )}
-            <CategoriesCard txs={data.txs} limits={data.limits} />
+            <CategoriesCard txs={data.txs} limits={data.limits} categories={data.categories} />
           </div>
 
           {/* RIGHT COLUMN */}
@@ -199,21 +207,64 @@ function InvestCard({ totals, cumulativeInvested }) {
 }
 
 // ─── CATEGORIES CARD ──────────────────────────────────────────────────────────
-function CategoriesCard({ txs, limits }) {
+function CategoriesCard({ txs, limits, categories }) {
+  const categoriesById = Object.fromEntries((categories || []).map(c => [c.id, c]))
   const grouped = {}
   txs.filter(t => t.type === 'expense').forEach(t => {
     const cat = t.category
     if (!cat) return
     const key = cat.parent_id ?? cat.id
-    if (!grouped[key]) grouped[key] = { name: cat.parent_id ? '...' : cat.name, icon: cat.icon, color: cat.color, total: 0, id: key }
+
+    // Resolve parent metadata even when only subcategory transactions exist this month.
+    const parent = cat.parent_id ? categoriesById[cat.parent_id] : cat
+    if (!grouped[key]) {
+      grouped[key] = {
+        name: parent?.name || cat.name || 'Sans categorie',
+        icon: parent?.icon || cat.icon,
+        color: parent?.color || cat.color,
+        total: 0,
+        id: key,
+      }
+    }
+
     grouped[key].total += Number(t.amount)
-    if (!cat.parent_id) { grouped[key].name = cat.name; grouped[key].icon = cat.icon; grouped[key].color = cat.color }
+
+    if (!cat.parent_id) {
+      grouped[key].name = cat.name
+      grouped[key].icon = cat.icon
+      grouped[key].color = cat.color
+    }
   })
 
-  const rows      = Object.values(grouped).sort((a, b) => b.total - a.total)
-  const limitsMap = Object.fromEntries(limits.map(l => [l.category_id, l.amount]))
+  // Ensure categories with a configured budget limit are visible even at 0 spent.
+  limits.forEach(limit => {
+    if (!grouped[limit.category_id]) {
+      const cat = limit.category || categoriesById[limit.category_id]
+      grouped[limit.category_id] = {
+        name: cat?.name || 'Sans categorie',
+        icon: cat?.icon || '•',
+        color: cat?.color || '#94a3b8',
+        total: 0,
+        id: limit.category_id,
+      }
+    }
+  })
 
-  if (rows.length === 0) return (
+  const rows = Object.values(grouped).sort((a, b) => {
+    if (b.total !== a.total) return b.total - a.total
+    return String(a.name).localeCompare(String(b.name), 'fr')
+  })
+  const limitsMap = Object.fromEntries(limits.map(l => [l.category_id, l.amount]))
+  const plannedLimitsTotal = limits.reduce((acc, l) => acc + Number(l.amount || 0), 0)
+  const spentInLimitedCategories = limits.reduce((acc, l) => {
+    const spent = grouped[l.category_id]?.total ?? 0
+    return acc + spent
+  }, 0)
+  const limitsUsagePct = plannedLimitsTotal > 0
+    ? Math.min((spentInLimitedCategories / plannedLimitsTotal) * 100, 100)
+    : 0
+
+  if (rows.length === 0 && limits.length === 0) return (
     <div style={styles.card}>
       <h2 style={styles.cardTitle}>Par catégorie</h2>
       <p style={styles.empty}>Aucune dépense ce mois-ci.</p>
@@ -223,11 +274,30 @@ function CategoriesCard({ txs, limits }) {
   return (
     <div style={styles.card}>
       <h2 style={styles.cardTitle}>Par catégorie</h2>
+      {limits.length > 0 && (
+        <div style={{ marginBottom: '0.8rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.78rem', color: '#64748b', marginBottom: '0.35rem' }}>
+            <span>Limites prévues</span>
+            <span style={{ fontWeight: '700', color: '#334155' }}>{fmt(spentInLimitedCategories)} / {fmt(plannedLimitsTotal)}</span>
+          </div>
+          <div style={styles.barTrack}>
+            <div
+              style={{
+                ...styles.barFill,
+                width: `${limitsUsagePct}%`,
+                backgroundColor: limitsUsagePct >= 100 ? '#ef4444' : limitsUsagePct >= 80 ? '#f59e0b' : '#22c55e'
+              }}
+            />
+          </div>
+        </div>
+      )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
         {rows.map(row => {
-          const limit  = limitsMap[row.id]
-          const pct    = limit ? Math.min((row.total / limit) * 100, 100) : null
-          const status = pct === null ? null : pct >= 100 ? 'over' : pct >= 80 ? 'warn' : 'ok'
+          const limit = limitsMap[row.id]
+          const hasLimit = Number.isFinite(limit) && limit > 0
+          const isUnplanned = !hasLimit && row.total > 0
+          const pct = hasLimit ? Math.min((row.total / limit) * 100, 100) : isUnplanned ? 100 : null
+          const status = isUnplanned ? 'unplanned' : pct === null ? null : pct >= 100 ? 'over' : pct >= 80 ? 'warn' : 'ok'
           const barColor = status === 'over' ? '#ef4444' : status === 'warn' ? '#f59e0b' : '#22c55e'
           return (
             <div key={row.id}>
@@ -235,17 +305,27 @@ function CategoriesCard({ txs, limits }) {
                 <span style={styles.catIcon}>{row.icon}</span>
                 <span style={styles.catName}>{row.name}</span>
                 <span style={styles.catAmount}>{fmt(row.total)}</span>
-                {status === 'over' && <span style={{ color: '#ef4444', fontSize: '0.8rem' }}>⚠️</span>}
+                {(status === 'over' || status === 'unplanned') && <span style={{ color: '#ef4444', fontSize: '0.8rem' }}>⚠️</span>}
                 {status === 'warn' && <span style={{ color: '#f59e0b', fontSize: '0.8rem' }}>!</span>}
               </div>
-              {limit && (
+              {(hasLimit || isUnplanned) && (
                 <>
                   <div style={styles.barTrack}>
-                    <div style={{ ...styles.barFill, width: `${pct}%`, backgroundColor: barColor }} />
+                    <div
+                      style={{
+                        ...styles.barFill,
+                        width: `${pct}%`,
+                        backgroundColor: status === 'unplanned' ? '#ef4444' : barColor,
+                      }}
+                    />
                   </div>
                   <div style={styles.catLimit}>
-                    <span>{fmt(row.total)} / {fmt(limit)}</span>
-                    <span style={{ color: barColor }}>{Math.round(pct)}%</span>
+                    <span>
+                      {hasLimit ? `${fmt(row.total)} / ${fmt(limit)}` : `${fmt(row.total)} / Non prevu`}
+                    </span>
+                    <span style={{ color: status === 'unplanned' ? '#ef4444' : barColor }}>
+                      {status === 'unplanned' ? 'Hors budget' : `${Math.round(pct)}%`}
+                    </span>
                   </div>
                 </>
               )}
